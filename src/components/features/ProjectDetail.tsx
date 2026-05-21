@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Plus } from 'lucide-react';
+import { ChevronLeft, Plus, MoreHorizontal } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
-import AddWorkModal from './AddWorkModal';
+import AddWorkModal, { WorkFormData } from './AddWorkModal';
 import { Project, WorkRecord } from '@/types';
 
 const DUMMY_PROJECTS: Project[] = [
@@ -52,11 +52,11 @@ const DUMMY_PROJECTS: Project[] = [
 ];
 
 const DUMMY_WORK_RECORDS: WorkRecord[] = [
-  { id: '1', projectId: '1', date: '2025-05-21', diameter: '', content: '지하누수', hasPhoto: true, createdAt: '2025-05-21T09:00:00' },
-  { id: '2', projectId: '1', date: '2025-05-21', diameter: 'D25', content: '지하누수', hasPhoto: true, createdAt: '2025-05-21T10:30:00' },
-  { id: '3', projectId: '1', date: '2025-05-21', diameter: 'D25', content: '지하누수', hasPhoto: true, createdAt: '2025-05-21T14:00:00' },
-  { id: '4', projectId: '1', date: '2025-05-20', diameter: 'D25', content: '아1×2.5', hasPhoto: true, createdAt: '2025-05-20T09:00:00' },
-  { id: '5', projectId: '1', date: '2025-05-20', diameter: 'D25', content: '지하누수', hasPhoto: true, createdAt: '2025-05-20T11:00:00' },
+  { id: '1', projectId: '1', date: '2025-05-21', diameter: '', content: '지하누수', timeOfDay: 'day', hasPhoto: true, createdAt: '2025-05-21T09:00:00' },
+  { id: '2', projectId: '1', date: '2025-05-21', diameter: 'D25', content: '지하누수', timeOfDay: 'day', hasPhoto: true, createdAt: '2025-05-21T10:30:00' },
+  { id: '3', projectId: '1', date: '2025-05-21', diameter: 'D25', content: '지하누수', timeOfDay: 'night', hasPhoto: true, createdAt: '2025-05-21T22:00:00' },
+  { id: '4', projectId: '1', date: '2025-05-20', diameter: 'D25', content: '아1×2.5', timeOfDay: 'day', hasPhoto: true, createdAt: '2025-05-20T09:00:00' },
+  { id: '5', projectId: '1', date: '2025-05-20', diameter: 'D25', content: '지하누수', timeOfDay: 'night', hasPhoto: true, createdAt: '2025-05-20T21:00:00' },
 ];
 
 type Tab = '기본정보' | '작업기록' | '위치';
@@ -77,10 +77,14 @@ function formatTime(iso: string) {
 export default function ProjectDetail({ id }: { id: string }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('기본정보');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isWorkModalOpen, setIsWorkModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<WorkRecord | null>(null);
+  const [openWorkMenuId, setOpenWorkMenuId] = useState<string | null>(null);
+  const [workRecords, setWorkRecords] = useState<WorkRecord[]>(
+    () => DUMMY_WORK_RECORDS.filter((r) => r.projectId === id)
+  );
 
   const project = DUMMY_PROJECTS.find((p) => p.id === id);
-  const workRecords = DUMMY_WORK_RECORDS.filter((r) => r.projectId === id);
 
   if (!project) {
     return (
@@ -107,8 +111,42 @@ export default function ProjectDetail({ id }: { id: string }) {
     { label: '공사 유형', value: project.type },
   ];
 
+  function handleSaveWork(data: WorkFormData) {
+    if (editingRecord) {
+      setWorkRecords((prev) =>
+        prev.map((r) => (r.id === editingRecord.id ? { ...r, ...data } : r))
+      );
+    } else {
+      const newRecord: WorkRecord = {
+        id: String(Date.now()),
+        projectId: id,
+        createdAt: new Date().toISOString(),
+        ...data,
+      };
+      setWorkRecords((prev) => [...prev, newRecord]);
+    }
+    setEditingRecord(null);
+    setIsWorkModalOpen(false);
+  }
+
+  function handleDeleteWork(recordId: string) {
+    setWorkRecords((prev) => prev.filter((r) => r.id !== recordId));
+    setOpenWorkMenuId(null);
+  }
+
+  function openAddWork() {
+    setEditingRecord(null);
+    setIsWorkModalOpen(true);
+  }
+
+  function openEditWork(record: WorkRecord) {
+    setEditingRecord(record);
+    setIsWorkModalOpen(true);
+    setOpenWorkMenuId(null);
+  }
+
   return (
-    <div>
+    <div onClick={() => setOpenWorkMenuId(null)}>
       {/* 커스텀 헤더 */}
       <div className="h-14 bg-white border-b border-[#e5e7eb] flex items-center px-4 gap-3">
         <button
@@ -161,7 +199,7 @@ export default function ProjectDetail({ id }: { id: string }) {
         {activeTab === '작업기록' && (
           <div className="space-y-5">
             <div className="flex justify-end">
-              <Button size="sm" onClick={() => setIsModalOpen(true)}>
+              <Button size="sm" onClick={openAddWork}>
                 <Plus size={15} className="mr-1.5" />
                 작업 추가
               </Button>
@@ -188,8 +226,37 @@ export default function ProjectDetail({ id }: { id: string }) {
                   {groupedByDate[date].map((record) => (
                     <div
                       key={record.id}
-                      className="bg-white border border-[#e5e7eb] rounded-xl overflow-hidden shadow-sm"
+                      className="relative bg-white border border-[#e5e7eb] rounded-xl overflow-hidden shadow-sm"
                     >
+                      {/* ⋯ 버튼 */}
+                      <div className="absolute top-2 right-2 z-10">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenWorkMenuId(openWorkMenuId === record.id ? null : record.id);
+                          }}
+                          className="p-1 rounded-lg hover:bg-[#f3f4f6] transition-colors"
+                        >
+                          <MoreHorizontal size={15} className="text-[#9ca3af]" />
+                        </button>
+                        {openWorkMenuId === record.id && (
+                          <div className="absolute right-0 top-full mt-1 w-20 bg-white border border-[#e5e7eb] rounded-lg shadow-md overflow-hidden">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openEditWork(record); }}
+                              className="w-full px-3 py-2 text-xs text-left text-[#374151] hover:bg-[#f3f4f6] transition-colors"
+                            >
+                              수정
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteWork(record.id); }}
+                              className="w-full px-3 py-2 text-xs text-left text-[#6b7280] hover:bg-[#f3f4f6] transition-colors border-t border-[#f3f4f6]"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="flex">
                         {/* 썸네일 */}
                         <div className="w-24 h-24 flex-shrink-0 bg-[#f0f4f9] flex items-center justify-center">
@@ -201,7 +268,7 @@ export default function ProjectDetail({ id }: { id: string }) {
                         </div>
 
                         {/* 메타정보 */}
-                        <div className="flex-1 px-4 py-3 space-y-1.5">
+                        <div className="flex-1 px-4 py-3 pr-8 space-y-1.5">
                           {record.diameter && (
                             <div className="flex gap-2">
                               <span className="text-xs text-[#9ca3af] w-10 flex-shrink-0">구경</span>
@@ -221,7 +288,8 @@ export default function ProjectDetail({ id }: { id: string }) {
                             <span className="text-xs text-[#111827]">{project.client}</span>
                           </div>
                           <p className="text-[10px] text-[#9ca3af] pt-0.5">
-                            {formatTime(record.createdAt)}
+                            {formatTime(record.createdAt)}{' '}
+                            {record.timeOfDay === 'day' ? '🌤' : '🌙'}
                           </p>
                         </div>
                       </div>
@@ -256,9 +324,11 @@ export default function ProjectDetail({ id }: { id: string }) {
       </div>
 
       <AddWorkModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        isOpen={isWorkModalOpen}
+        onClose={() => { setIsWorkModalOpen(false); setEditingRecord(null); }}
         projectId={id}
+        initialData={editingRecord ?? undefined}
+        onSave={handleSaveWork}
       />
     </div>
   );

@@ -1,23 +1,55 @@
 'use client';
 
-import { useState, useRef, ChangeEvent } from 'react';
+import { useState, useRef, useEffect, ChangeEvent } from 'react';
 import { Camera, X } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { WorkRecord } from '@/types';
+
+export type WorkFormData = {
+  date: string;
+  diameter: string;
+  content: string;
+  memo: string;
+  timeOfDay: 'day' | 'night';
+  hasPhoto: boolean;
+};
 
 interface AddWorkModalProps {
   isOpen: boolean;
   onClose: () => void;
   projectId: string;
+  initialData?: WorkRecord;
+  onSave: (data: WorkFormData) => void;
 }
 
-export default function AddWorkModal({ isOpen, onClose, projectId }: AddWorkModalProps) {
-  const today = new Date().toISOString().split('T')[0];
+export default function AddWorkModal({
+  isOpen,
+  onClose,
+  projectId: _projectId,
+  initialData,
+  onSave,
+}: AddWorkModalProps) {
+  const isEditMode = !!initialData;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [preview, setPreview] = useState<string | null>(null);
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState('');
   const [diameter, setDiameter] = useState('');
   const [content, setContent] = useState('');
   const [memo, setMemo] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [timeOfDay, setTimeOfDay] = useState<'day' | 'night'>('day');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const today = new Date().toISOString().split('T')[0];
+    setDate(initialData?.date ?? today);
+    setDiameter(initialData?.diameter ?? '');
+    setContent(initialData?.content ?? '');
+    setMemo(initialData?.memo ?? '');
+    setTimeOfDay(initialData?.timeOfDay ?? 'day');
+    setPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [isOpen, initialData]);
 
   if (!isOpen) return null;
 
@@ -32,8 +64,14 @@ export default function AddWorkModal({ isOpen, onClose, projectId }: AddWorkModa
   }
 
   function handleSubmit() {
-    // TODO: 실제 저장 연결
-    console.log({ projectId, date, diameter, content, memo });
+    onSave({
+      date,
+      diameter,
+      content,
+      memo,
+      timeOfDay,
+      hasPhoto: !!preview,
+    });
     onClose();
   }
 
@@ -42,14 +80,13 @@ export default function AddWorkModal({ isOpen, onClose, projectId }: AddWorkModa
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
-      {/* 딤 배경 */}
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-
-      {/* 모달 패널 */}
       <div className="relative w-full md:max-w-lg bg-white rounded-t-2xl md:rounded-2xl max-h-[90vh] overflow-y-auto">
         {/* 헤더 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#e5e7eb]">
-          <h2 className="text-base font-medium text-[#111827]">작업 추가</h2>
+          <h2 className="text-base font-medium text-[#111827]">
+            {isEditMode ? '작업 수정' : '작업 추가'}
+          </h2>
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-[#f3f4f6] transition-colors"
@@ -102,6 +139,33 @@ export default function AddWorkModal({ isOpen, onClose, projectId }: AddWorkModa
             />
           </div>
 
+          {/* 작업 시간대 */}
+          <div>
+            <label className="block text-sm font-medium text-[#374151] mb-1.5">작업 시간대</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setTimeOfDay('day')}
+                className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${
+                  timeOfDay === 'day'
+                    ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]'
+                    : 'bg-white text-[#6b7280] border-[#e5e7eb] hover:border-[#1e3a5f]'
+                }`}
+              >
+                🌤 주간
+              </button>
+              <button
+                onClick={() => setTimeOfDay('night')}
+                className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${
+                  timeOfDay === 'night'
+                    ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]'
+                    : 'bg-white text-[#6b7280] border-[#e5e7eb] hover:border-[#1e3a5f]'
+                }`}
+              >
+                🌙 야간
+              </button>
+            </div>
+          </div>
+
           {/* 구경 */}
           <div>
             <label className="block text-sm font-medium text-[#374151] mb-1.5">구경</label>
@@ -147,7 +211,7 @@ export default function AddWorkModal({ isOpen, onClose, projectId }: AddWorkModa
             취소
           </Button>
           <Button variant="primary" className="flex-1" onClick={handleSubmit}>
-            저장
+            {isEditMode ? '수정' : '저장'}
           </Button>
         </div>
       </div>

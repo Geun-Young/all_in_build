@@ -4,8 +4,8 @@ export type ProjectStatus = '진행중' | '완료' | '대기';
 export interface Project {
   id: string;
   name: string;
-  client: string;      // 시행청
-  contractor: string;  // 시행사
+  client: string;
+  contractor: string;
   location: string;
   type: ProjectType;
   status: ProjectStatus;
@@ -21,6 +21,7 @@ export interface WorkRecord {
   date: string;
   diameter: string;
   content: string;
+  timeOfDay: 'day' | 'night';
   hasPhoto: boolean;
   memo?: string;
   createdAt: string;
