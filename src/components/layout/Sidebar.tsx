@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, HardHat, FileText, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, HardHat, FileText, ClipboardList, PenTool } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { href: '/projects', label: '공사 현장', icon: HardHat },
   { href: '/estimate', label: '견적 관리', icon: FileText },
   { href: '/site-log', label: '현장 일지', icon: ClipboardList },
+  { href: '/blueprint', label: '도면 설계', icon: PenTool },
 ];
 
 export default function Sidebar() {
