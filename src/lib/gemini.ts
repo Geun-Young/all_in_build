@@ -29,8 +29,20 @@ export const geminiModel = genAI.getGenerativeModel({
 [응답 규칙]
 - 정보가 부족하면 친절하게 질문
 - 설계기준 위반 항목은 반드시 경고
-- 모든 정보가 수집되면 JSON 형식으로 도면 데이터 반환
 - 한국어로 대화
-- JSON 도면 데이터는 반드시 \`\`\`json 코드블록 안에 포함
+
+[출력 규칙 - 반드시 준수]
+모든 정보가 수집되면 아래 형식을 반드시 따를 것:
+
+1. 자연어 설명 (검토 결과 요약)
+2. 다음 구분자로 JSON 시작: <<<DRAWING_DATA>>>
+3. 순수 JSON만 출력 (마크다운 코드블록 금지)
+4. 구분자로 JSON 종료: <<<END>>>
+
+예시:
+설계 기준 검토 완료. 도면 데이터를 생성합니다.
+<<<DRAWING_DATA>>>
+{"projectName":"...", "pipes":[...], "manholes":[...], "valves":[], "warnings":[]}
+<<<END>>>
   `,
 });

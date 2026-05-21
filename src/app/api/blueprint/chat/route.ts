@@ -24,14 +24,19 @@ export async function POST(req: NextRequest) {
     const result = await chat.sendMessage(lastMessage.content);
     const text = result.response.text();
 
-    // JSON 감지 방법 3가지 시도
+    // JSON 감지 — 우선순위 순으로 시도
     let drawingData = null;
 
+    // 1. 커스텀 구분자 <<<DRAWING_DATA>>> ... <<<END>>>
+    const delimMatch = text.match(/<<<DRAWING_DATA>>>\s*([\s\S]*?)\s*<<<END>>>/);
+    // 2. ```json 코드블록
     const jsonMatch1 = text.match(/```json\n?([\s\S]*?)\n?```/);
+    // 3. ``` 코드블록
     const jsonMatch2 = text.match(/```\n?([\s\S]*?)\n?```/);
+    // 4. "pipes" 키를 포함한 raw JSON 객체
     const jsonMatch3 = text.match(/\{[\s\S]*"pipes"[\s\S]*\}/);
 
-    const rawJson = jsonMatch1?.[1] || jsonMatch2?.[1] || jsonMatch3?.[0];
+    const rawJson = delimMatch?.[1] || jsonMatch1?.[1] || jsonMatch2?.[1] || jsonMatch3?.[0];
 
     if (rawJson) {
       try {
@@ -46,6 +51,7 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanMessage = text
+      .replace(/<<<DRAWING_DATA>>>[\s\S]*?<<<END>>>/g, '')
       .replace(/```json\n?[\s\S]*?\n?```/g, '')
       .replace(/```\n?[\s\S]*?\n?```/g, '')
       .trim();
