@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import Header from '@/components/layout/Header';
-import { Send, Download, PenTool, Loader2 } from 'lucide-react';
+import { Send, Download, PenTool, Loader2, RotateCcw } from 'lucide-react';
 
 type Message = {
   role: 'user' | 'assistant';
@@ -28,6 +28,8 @@ type DrawingData = {
     manholeSpacing: string;
   };
 };
+
+const SESSION_KEY = 'blueprint_messages';
 
 const INITIAL_MESSAGE: Message = {
   role: 'assistant',
@@ -190,16 +192,40 @@ function DrawingCanvas({ data }: { data: DrawingData }) {
 
 // ── 메인 페이지 ───────────────────────────────────────────────
 export default function BlueprintPage() {
-  const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (typeof window === 'undefined') return [INITIAL_MESSAGE];
+    try {
+      const saved = sessionStorage.getItem(SESSION_KEY);
+      return saved ? (JSON.parse(saved) as Message[]) : [INITIAL_MESSAGE];
+    } catch {
+      return [INITIAL_MESSAGE];
+    }
+  });
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [drawingData, setDrawingData] = useState<DrawingData | null>(null);
   const [mobileTab, setMobileTab] = useState<'chat' | 'drawing'>('chat');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // 메시지 변경 시 sessionStorage에 저장
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(messages));
+    } catch {
+      // sessionStorage 용량 초과 등 예외 무시
+    }
+  }, [messages]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  function handleReset() {
+    sessionStorage.removeItem(SESSION_KEY);
+    setMessages([INITIAL_MESSAGE]);
+    setDrawingData(null);
+    setMobileTab('chat');
+  }
 
   async function handleSend() {
     if (!input.trim() || isLoading) return;
@@ -296,9 +322,18 @@ export default function BlueprintPage() {
           } md:flex flex-col w-full md:w-2/5 border-r border-[#e5e7eb] bg-white min-h-0`}
         >
           {/* 패널 헤더 */}
-          <div className="px-5 py-3 border-b border-[#e5e7eb] flex-shrink-0">
-            <p className="text-sm font-medium text-[#111827]">AI 도면 설계</p>
-            <p className="text-xs text-[#6b7280]">AI와 대화로 도면을 자동 생성합니다</p>
+          <div className="px-5 py-3 border-b border-[#e5e7eb] flex-shrink-0 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-[#111827]">AI 도면 설계</p>
+              <p className="text-xs text-[#6b7280]">AI와 대화로 도면을 자동 생성합니다</p>
+            </div>
+            <button
+              onClick={handleReset}
+              className="flex items-center gap-1 text-xs text-[#9ca3af] hover:text-[#6b7280] transition-colors"
+            >
+              <RotateCcw size={12} />
+              대화 초기화
+            </button>
           </div>
 
           {/* 메시지 영역 */}
