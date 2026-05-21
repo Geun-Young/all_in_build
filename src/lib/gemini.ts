@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export const geminiModel = genAI.getGenerativeModel({
-  model: 'gemini-1.5-flash',
+  model: 'gemini-2.5-flash-lite',
   systemInstruction: `
 당신은 대한민국 상하수도 공사 전문 설계 AI입니다.
 사용자와 대화를 통해 관로 정보를 수집하고, 설계기준에 맞는 도면 데이터를 생성합니다.
