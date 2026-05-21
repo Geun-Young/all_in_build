@@ -30,6 +30,12 @@ export async function POST(req: NextRequest) {
     if (jsonMatch) {
       try {
         drawingData = JSON.parse(jsonMatch[1]);
+        if (drawingData) {
+          drawingData.pipes = drawingData.pipes ?? [];
+          drawingData.manholes = drawingData.manholes ?? [];
+          drawingData.valves = drawingData.valves ?? [];
+          drawingData.warnings = drawingData.warnings ?? [];
+        }
       } catch {
         // JSON 파싱 실패 시 무시
       }

@@ -42,15 +42,19 @@ function DrawingCanvas({ data }: { data: DrawingData }) {
   const PAD = 80;
   const LEGEND_W = 155;
 
+  const pipes = data?.pipes ?? [];
+  const manholes = data?.manholes ?? [];
+  const valves = data?.valves ?? [];
+
   const allX = [
-    ...data.pipes.flatMap((p) => [p.x1, p.x2]),
-    ...data.manholes.map((m) => m.x),
-    ...data.valves.map((v) => v.x),
+    ...pipes.flatMap((p) => [p.x1, p.x2]),
+    ...manholes.map((m) => m.x),
+    ...valves.map((v) => v.x),
   ];
   const allY = [
-    ...data.pipes.flatMap((p) => [p.y1, p.y2]),
-    ...data.manholes.map((m) => m.y),
-    ...data.valves.map((v) => v.y),
+    ...pipes.flatMap((p) => [p.y1, p.y2]),
+    ...manholes.map((m) => m.y),
+    ...valves.map((v) => v.y),
   ];
 
   const minX = allX.length ? Math.min(...allX) : 0;
@@ -69,9 +73,9 @@ function DrawingCanvas({ data }: { data: DrawingData }) {
   return (
     <div className="w-full h-full flex flex-col gap-3">
       {/* 경고 배너 */}
-      {data.warnings.length > 0 && (
+      {(data?.warnings ?? []).length > 0 && (
         <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg space-y-1">
-          {data.warnings.map((w, i) => (
+          {(data?.warnings ?? []).map((w, i) => (
             <p key={i} className="text-xs text-yellow-800">
               ⚠️ {w}
             </p>
@@ -95,7 +99,7 @@ function DrawingCanvas({ data }: { data: DrawingData }) {
           preserveAspectRatio="xMidYMid meet"
         >
           {/* 치수선 */}
-          {data.pipes.map((pipe, i) => (
+          {pipes.map((pipe, i) => (
             <g key={`dim-${i}`}>
               <line
                 x1={pipe.x1} y1={pipe.y1 - 28}
@@ -110,7 +114,7 @@ function DrawingCanvas({ data }: { data: DrawingData }) {
           ))}
 
           {/* 관로 */}
-          {data.pipes.map((pipe, i) => (
+          {pipes.map((pipe, i) => (
             <g key={`pipe-${i}`}>
               <line
                 x1={pipe.x1} y1={pipe.y1}
@@ -130,7 +134,7 @@ function DrawingCanvas({ data }: { data: DrawingData }) {
           ))}
 
           {/* 맨홀 */}
-          {data.manholes.map((mh, i) => (
+          {manholes.map((mh, i) => (
             <g key={`mh-${i}`}>
               <circle cx={mh.x} cy={mh.y} r="20"
                 fill="white" stroke="#1e3a5f" strokeWidth="2.5" />
@@ -150,7 +154,7 @@ function DrawingCanvas({ data }: { data: DrawingData }) {
           ))}
 
           {/* 밸브 (마름모) */}
-          {data.valves.map((v, i) => (
+          {valves.map((v, i) => (
             <g key={`valve-${i}`}>
               <polygon
                 points={`${v.x},${v.y - 13} ${v.x + 13},${v.y} ${v.x},${v.y + 13} ${v.x - 13},${v.y}`}
