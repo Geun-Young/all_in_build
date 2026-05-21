@@ -24,25 +24,34 @@ export async function POST(req: NextRequest) {
     const result = await chat.sendMessage(lastMessage.content);
     const text = result.response.text();
 
-    // JSON 도면 데이터 감지
+    // JSON 감지 방법 3가지 시도
     let drawingData = null;
-    const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
-    if (jsonMatch) {
+
+    const jsonMatch1 = text.match(/```json\n?([\s\S]*?)\n?```/);
+    const jsonMatch2 = text.match(/```\n?([\s\S]*?)\n?```/);
+    const jsonMatch3 = text.match(/\{[\s\S]*"pipes"[\s\S]*\}/);
+
+    const rawJson = jsonMatch1?.[1] || jsonMatch2?.[1] || jsonMatch3?.[0];
+
+    if (rawJson) {
       try {
-        drawingData = JSON.parse(jsonMatch[1]);
-        if (drawingData) {
-          drawingData.pipes = drawingData.pipes ?? [];
-          drawingData.manholes = drawingData.manholes ?? [];
-          drawingData.valves = drawingData.valves ?? [];
-          drawingData.warnings = drawingData.warnings ?? [];
-        }
-      } catch {
-        // JSON 파싱 실패 시 무시
+        drawingData = JSON.parse(rawJson);
+        drawingData.pipes = drawingData.pipes ?? [];
+        drawingData.manholes = drawingData.manholes ?? [];
+        drawingData.valves = drawingData.valves ?? [];
+        drawingData.warnings = drawingData.warnings ?? [];
+      } catch (e) {
+        console.error('JSON 파싱 실패:', e);
       }
     }
 
+    const cleanMessage = text
+      .replace(/```json\n?[\s\S]*?\n?```/g, '')
+      .replace(/```\n?[\s\S]*?\n?```/g, '')
+      .trim();
+
     return NextResponse.json({
-      message: text.replace(/```json\n[\s\S]*?\n```/, '').trim(),
+      message: cleanMessage,
       drawingData,
     });
   } catch (error) {
