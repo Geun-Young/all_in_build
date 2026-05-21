@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       drawingData,
     });
   } catch (error) {
-    console.error('Gemini API error:', error);
-    return NextResponse.json({ error: 'AI 응답 오류' }, { status: 500 });
+    console.error('Gemini 오류 상세:', error);
+    return NextResponse.json({ error: 'AI 응답 오류', detail: String(error) }, { status: 500 });
   }
 }
