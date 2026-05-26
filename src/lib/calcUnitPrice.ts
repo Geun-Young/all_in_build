@@ -50,9 +50,10 @@ export function calcUnitPrice(
   // 항목별 반올림 없이 합산 후 한 번만 버림 (분산 오차 방지)
   const labor = Math.floor(laborRaw);
 
-  // 공구손료 (노무비 기준 or 합계 기준)
+  // 공구손료 → 재료비로 분류 (별도 장비 없을 때 경비=0)
   const expenseBase_ = expenseBase === 'labor' ? labor : labor + material;
-  const expense = Math.floor(expenseBase_ * (expenseRate / 100));
+  material += Math.floor(expenseBase_ * (expenseRate / 100));
+  const expense = 0;
 
   // 야간할증: 공구손료 계산 후 노무비에 가산
   const nightAdd = isNight ? Math.floor(labor * (nightSurcharge / 100)) : 0;
