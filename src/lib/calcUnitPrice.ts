@@ -33,19 +33,22 @@ export function calcUnitPrice(
   laborWages: Record<string, number> = DEFAULT_LABOR_WAGES,
   nightSurcharge: number = 87.5,
 ): UnitPriceResult {
-  let labor = 0;
+  let laborRaw = 0;
   let material = 0;
 
   for (const comp of components) {
     if (comp.component_type === 'labor') {
       const wage = laborWages[comp.component_name] ?? 0;
-      labor += Math.floor(comp.quantity * wage);
+      laborRaw += comp.quantity * wage;
     }
     if (comp.component_type === 'material') {
       // 재료 단가는 별도 관리 — 현재는 0 처리
       material += 0;
     }
   }
+
+  // 항목별 반올림 없이 합산 후 한 번만 버림 (분산 오차 방지)
+  const labor = Math.floor(laborRaw);
 
   // 공구손료 (노무비 기준 or 합계 기준)
   const expenseBase_ = expenseBase === 'labor' ? labor : labor + material;
