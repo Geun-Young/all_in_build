@@ -6,16 +6,17 @@ import { EstimateItem, StandardPrice } from '@/types';
 import { exportEstimateToExcel } from '@/lib/exportExcel';
 import {
   ArrowLeft, Download, CheckCircle, X, Search, Sun, Moon,
-  Plus, Trash2, ChevronDown,
+  Plus, Trash2, ChevronDown, Calculator,
 } from 'lucide-react';
 
 // ── 계산 ──────────────────────────────────────────────
+// 재료비/경비는 나머지를 8:2 분리 (재료비 반올림 → 경비는 나머지로 총액 보정)
 function calcAmounts(unitPrice: number, laborRatio: number, quantity: number) {
   const total = Math.round(unitPrice * quantity);
   const labor = Math.round(total * (laborRatio / 100));
-  const materialAndExpense = total - labor;
-  const expense = Math.round(materialAndExpense * 0.2);
-  const material = materialAndExpense - expense;
+  const rest = total - labor;
+  const material = Math.round(rest * 0.8);
+  const expense = rest - material;
   return { labor, material, expense, total };
 }
 
@@ -437,6 +438,22 @@ export default function EstimateDetailPage() {
         </span>
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => {
+              const p = new URLSearchParams({
+                labor: String(totalLabor),
+                material: String(totalMaterial),
+                expense: String(totalExpense),
+                name: estimateName,
+              });
+              router.push(`/estimate/${id}/cost?${p}`);
+            }}
+            disabled={items.length === 0}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-[#e5e7eb] rounded-lg text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40 transition-colors"
+          >
+            <Calculator size={13} />
+            원가계산서
+          </button>
           <button
             onClick={handleExcel}
             disabled={items.length === 0}
