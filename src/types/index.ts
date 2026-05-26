@@ -40,6 +40,36 @@ export interface StandardPrice {
   standard_year: string;
 }
 
+export interface WorkType {
+  id: string;
+  code: string;
+  category: string;
+  name: string;
+  spec: string;
+  unit: string;
+  expense_rate: number;
+  expense_base: string;
+  night_surcharge: number;
+}
+
+export interface WorkComponent {
+  id: string;
+  work_type_id: string;
+  component_type: 'labor' | 'equipment' | 'material';
+  component_name: string;
+  quantity: number;
+  unit: string;
+  sort_order: number;
+}
+
+export interface WorkTypeResult extends WorkType {
+  unit_price: number;
+  labor_price: number;
+  material_price: number;
+  expense_price: number;
+  is_night: boolean;
+}
+
 export interface Estimate {
   id: string;
   project_id?: string;
