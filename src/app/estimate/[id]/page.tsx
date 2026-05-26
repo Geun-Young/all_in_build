@@ -60,7 +60,6 @@ interface QuantityModalProps {
 
 function QuantityModal({ price, onConfirm, onClose }: QuantityModalProps) {
   const [quantity, setQuantity] = useState(1);
-  const [isNight, setIsNight] = useState(price.is_night);
   const amounts = calcAmounts(price.unit_price, price.labor_ratio, quantity);
 
   return (
@@ -94,16 +93,6 @@ function QuantityModal({ price, onConfirm, onClose }: QuantityModalProps) {
             />
           </div>
 
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isNight}
-              onChange={(e) => setIsNight(e.target.checked)}
-              className="rounded"
-            />
-            <span className="text-sm text-[#374151]">야간 작업</span>
-          </label>
-
           <div className="bg-[#f8fafc] rounded-lg p-3 space-y-1.5">
             <div className="flex justify-between text-xs">
               <span className="text-[#9ca3af]">노무비</span>
@@ -132,7 +121,7 @@ function QuantityModal({ price, onConfirm, onClose }: QuantityModalProps) {
             취소
           </button>
           <button
-            onClick={() => onConfirm(quantity, isNight)}
+            onClick={() => onConfirm(quantity, price.is_night)}
             disabled={!quantity || quantity <= 0}
             className="flex-1 py-2 text-sm bg-[#1e3a5f] text-white rounded-lg hover:bg-[#2d5080] disabled:opacity-40"
           >
