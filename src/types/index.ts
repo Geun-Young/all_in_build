@@ -27,22 +27,47 @@ export interface WorkRecord {
   createdAt: string;
 }
 
-export interface EstimateItem {
+export interface StandardPrice {
   id: string;
+  code: string;
   category: string;
-  name: string;
+  work_name: string;
+  spec: string;
   unit: string;
-  quantity: number;
-  unitPrice: number;
-  amount: number;
+  unit_price: number;
+  labor_ratio: number;
+  is_night: boolean;
+  standard_year: string;
 }
 
 export interface Estimate {
   id: string;
-  projectId: string;
-  items: EstimateItem[];
-  totalAmount: number;
-  createdAt: string;
+  project_id?: string;
+  estimate_name: string;
+  status: 'draft' | 'confirmed';
+  total_labor: number;
+  total_material: number;
+  total_expense: number;
+  total_amount: number;
+  created_at: string;
+}
+
+export interface EstimateItem {
+  id: string;
+  estimate_id: string;
+  category: string;
+  work_name: string;
+  spec: string;
+  unit: string;
+  quantity: number;
+  unit_price: number;
+  labor_amount: number;
+  material_amount: number;
+  expense_amount: number;
+  total_amount: number;
+  is_night: boolean;
+  sort_order: number;
+  notes?: string;
 }
 
 export interface SiteLog {
