@@ -39,7 +39,7 @@ export function calcUnitPrice(
   for (const comp of components) {
     if (comp.component_type === 'labor') {
       const wage = laborWages[comp.component_name] ?? 0;
-      labor += Math.round(comp.quantity * wage);
+      labor += Math.floor(comp.quantity * wage);
     }
     if (comp.component_type === 'material') {
       // 재료 단가는 별도 관리 — 현재는 0 처리
@@ -52,7 +52,7 @@ export function calcUnitPrice(
   const expense = Math.floor(expenseBase_ * (expenseRate / 100));
 
   // 야간할증: 공구손료 계산 후 노무비에 가산
-  const nightAdd = isNight ? Math.round(labor * (nightSurcharge / 100)) : 0;
+  const nightAdd = isNight ? Math.floor(labor * (nightSurcharge / 100)) : 0;
   const finalLabor = labor + nightAdd;
 
   return {

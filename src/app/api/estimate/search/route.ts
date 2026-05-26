@@ -17,7 +17,7 @@ const DUMMY_WORK_TYPES: Omit<WorkTypeResult, 'is_night'>[] = [
 
 function applyNight(base: Omit<WorkTypeResult, 'is_night'>, isNight: boolean): WorkTypeResult {
   if (!isNight) return { ...base, is_night: false };
-  const nightAdd = Math.round(base.labor_price * 0.875);
+  const nightAdd = Math.floor(base.labor_price * 0.875);
   const labor = base.labor_price + nightAdd;
   return {
     ...base,
