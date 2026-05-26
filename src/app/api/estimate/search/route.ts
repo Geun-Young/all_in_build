@@ -19,11 +19,22 @@ const DUMMY_PRICES = [
   { id: 'd15', code: 'C001', category: '콘크리트타설', work_name: '콘크리트 타설 (무근, 25MPa)', spec: '25MPa', unit: 'm³', unit_price: 95000, labor_ratio: 30, is_night: false, standard_year: '2024' },
 ];
 
+function filterDummy(q: string, category: string, night: boolean) {
+  let results = DUMMY_PRICES.filter((p) => p.is_night === night);
+  if (q) results = results.filter((p) => p.work_name.includes(q) || p.code.includes(q));
+  if (category && category !== '전체') results = results.filter((p) => p.category === category);
+  return results.slice(0, 20);
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get('q') ?? '';
   const category = searchParams.get('category') ?? '';
   const night = searchParams.get('night') === 'true';
+
+  if (!supabase) {
+    return NextResponse.json(filterDummy(q, category, night));
+  }
 
   try {
     let query = supabase
@@ -37,19 +48,9 @@ export async function GET(req: NextRequest) {
     if (category && category !== '전체') query = query.eq('category', category);
 
     const { data, error } = await query;
-
     if (error) throw error;
-    if (data && data.length > 0) {
-      return NextResponse.json(data);
-    }
+    return NextResponse.json(data ?? []);
   } catch {
-    // Supabase 미연결 시 더미 데이터 반환
+    return NextResponse.json(filterDummy(q, category, night));
   }
-
-  // 더미 데이터 필터링
-  let results = DUMMY_PRICES.filter((p) => p.is_night === night);
-  if (q) results = results.filter((p) => p.work_name.includes(q) || p.code.includes(q));
-  if (category && category !== '전체') results = results.filter((p) => p.category === category);
-
-  return NextResponse.json(results.slice(0, 20));
 }

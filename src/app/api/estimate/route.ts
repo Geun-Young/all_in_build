@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
+  if (!supabase) {
+    return NextResponse.json({ error: 'Supabase 미연결' }, { status: 503 });
+  }
+
   try {
     const body = await req.json();
     const { estimate_name, project_id } = body;
@@ -28,6 +32,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  if (!supabase) {
+    return NextResponse.json({ error: 'Supabase 미연결' }, { status: 503 });
+  }
+
   try {
     const body = await req.json();
     const { id, estimate_name, status, items } = body;
@@ -44,7 +52,6 @@ export async function PUT(req: NextRequest) {
 
     if (estimateError) throw estimateError;
 
-    // 기존 항목 삭제 후 재삽입
     await supabase.from('estimate_items').delete().eq('estimate_id', id);
 
     if (items.length > 0) {
