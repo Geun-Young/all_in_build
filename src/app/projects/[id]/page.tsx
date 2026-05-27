@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { EstimateItem, WorkTypeResult, Project, WorkRecord } from '@/types';
 import { exportEstimateToExcel } from '@/lib/exportExcel';
 import Badge from '@/components/ui/Badge';
@@ -174,23 +174,14 @@ function QuantityModal({ price, onConfirm, onClose }: QuantityModalProps) {
 }
 
 // ── 메인 페이지 ──────────────────────────────────────
-type MainTab = '공사현장' | '견적관리' | '도면설계';
-
-const MAIN_TABS: { key: MainTab; label: string }[] = [
-  { key: '공사현장', label: '📸 공사현장' },
-  { key: '견적관리', label: '💰 견적관리' },
-  { key: '도면설계', label: '📐 도면설계' },
-];
-
 export default function ProjectPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const tab = searchParams.get('tab') ?? 'site';
 
   const project = DUMMY_PROJECTS.find((p) => p.id === id);
-
-  // ── 탭 상태 ─
-  const [activeTab, setActiveTab] = useState<MainTab>('공사현장');
 
   // ── 공사현장 상태 ─
   const [workRecords, setWorkRecords] = useState<WorkRecord[]>(
@@ -342,28 +333,9 @@ export default function ProjectPage() {
         <Badge variant={project.status}>{project.status}</Badge>
       </header>
 
-      {/* 3탭 네비게이션 */}
-      <div className="bg-white border-b border-[#e5e7eb] flex flex-shrink-0">
-        {MAIN_TABS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex-1 font-medium transition-colors border-b-2 -mb-px ${
-              activeTab === key
-                ? 'border-[#1e3a5f] text-[#1e3a5f]'
-                : 'border-transparent text-[#6b7280] hover:text-[#374151]'
-            }`}
-            style={{ fontSize: '16px', minHeight: '52px' }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* ─── 탭 1: 공사현장 ───────────────────────────── */}
-      {activeTab === '공사현장' && (
+      {/* ─── site: 공사현장 ───────────────────────────── */}
+      {tab === 'site' && (
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          {/* 기본정보 카드 */}
           <div className="bg-white border border-[#e5e7eb] rounded-xl overflow-hidden">
             <div className="divide-y divide-[#f3f4f6]">
               {INFO_ROWS.map(({ label, value }) => (
@@ -375,7 +347,6 @@ export default function ProjectPage() {
             </div>
           </div>
 
-          {/* 작업 추가 버튼 */}
           <div className="flex justify-end">
             <button
               onClick={(e) => { e.stopPropagation(); setEditingRecord(null); setIsWorkModalOpen(true); }}
@@ -387,7 +358,6 @@ export default function ProjectPage() {
             </button>
           </div>
 
-          {/* 작업 기록 */}
           {sortedDates.length === 0 ? (
             <p className="text-center text-[#9ca3af] py-16" style={{ fontSize: '16px' }}>
               등록된 작업이 없습니다.
@@ -477,8 +447,8 @@ export default function ProjectPage() {
         </div>
       )}
 
-      {/* ─── 탭 2: 견적관리 ───────────────────────────── */}
-      {activeTab === '견적관리' && (
+      {/* ─── estimate: 견적관리 ───────────────────────── */}
+      {tab === 'estimate' && (
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* 견적 헤더 바 */}
           <div className="bg-white border-b border-[#e5e7eb] px-4 flex items-center gap-3 flex-shrink-0" style={{ height: '60px' }}>
@@ -531,14 +501,14 @@ export default function ProjectPage() {
 
           {/* 모바일 서브탭 */}
           <div className="md:hidden flex border-b border-[#e5e7eb] bg-white flex-shrink-0">
-            {(['table', 'search'] as const).map((tab) => (
-              <button key={tab} onClick={() => setEstimateSubTab(tab)}
+            {(['table', 'search'] as const).map((st) => (
+              <button key={st} onClick={() => setEstimateSubTab(st)}
                 className={`flex-1 transition-colors border-b-2 -mb-px ${
-                  estimateSubTab === tab ? 'border-[#1e3a5f] text-[#1e3a5f] font-medium' : 'border-transparent text-[#6b7280]'
+                  estimateSubTab === st ? 'border-[#1e3a5f] text-[#1e3a5f] font-medium' : 'border-transparent text-[#6b7280]'
                 }`}
                 style={{ fontSize: '15px', minHeight: '44px' }}
               >
-                {tab === 'table' ? '내역서' : '공종추가'}
+                {st === 'table' ? '내역서' : '공종추가'}
               </button>
             ))}
           </div>
@@ -718,8 +688,8 @@ export default function ProjectPage() {
         </div>
       )}
 
-      {/* ─── 탭 3: 도면설계 ───────────────────────────── */}
-      {activeTab === '도면설계' && (
+      {/* ─── blueprint: 도면설계 ──────────────────────── */}
+      {tab === 'blueprint' && (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-3">
             <p className="text-[#9ca3af]" style={{ fontSize: '18px' }}>도면설계 기능 준비 중입니다</p>
