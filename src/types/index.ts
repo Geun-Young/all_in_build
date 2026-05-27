@@ -55,7 +55,7 @@ export interface WorkType {
 export interface WorkComponent {
   id: string;
   work_type_id: string;
-  component_type: 'labor' | 'equipment' | 'material';
+  component_type: 'labor' | 'equipment' | 'material' | 'fixed_labor' | 'fixed_material' | 'fixed_expense';
   component_name: string;
   quantity: number;
   unit: string;

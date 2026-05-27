@@ -35,25 +35,38 @@ export function calcUnitPrice(
 ): UnitPriceResult {
   let laborRaw = 0;
   let material = 0;
+  let fixedExpense = 0;
+  let hasFixed = false;
 
   for (const comp of components) {
     if (comp.component_type === 'labor') {
       const wage = laborWages[comp.component_name] ?? 0;
       laborRaw += comp.quantity * wage;
-    }
-    if (comp.component_type === 'material') {
+    } else if (comp.component_type === 'material') {
       // 재료 단가는 별도 관리 — 현재는 0 처리
       material += 0;
+    } else if (comp.component_type === 'fixed_labor') {
+      laborRaw += comp.quantity;
+      hasFixed = true;
+    } else if (comp.component_type === 'fixed_material') {
+      material += comp.quantity;
+      hasFixed = true;
+    } else if (comp.component_type === 'fixed_expense') {
+      fixedExpense += comp.quantity;
+      hasFixed = true;
     }
   }
 
   // 항목별 반올림 없이 합산 후 한 번만 버림 (분산 오차 방지)
   const labor = Math.floor(laborRaw);
 
-  // 공구손료 → 재료비로 분류 (별도 장비 없을 때 경비=0)
-  const expenseBase_ = expenseBase === 'labor' ? labor : labor + material;
-  material += Math.floor(expenseBase_ * (expenseRate / 100));
-  const expense = 0;
+  // fixed_* 타입은 이미 계산된 단가이므로 공구손료 미적용
+  let expense = Math.floor(fixedExpense);
+  if (!hasFixed) {
+    // 공구손료 → 재료비로 분류 (별도 장비 없을 때 경비=0)
+    const expenseBase_ = expenseBase === 'labor' ? labor : labor + material;
+    material += Math.floor(expenseBase_ * (expenseRate / 100));
+  }
 
   // 야간할증: 공구손료 계산 후 노무비에 가산
   const nightAdd = isNight ? Math.floor(labor * (nightSurcharge / 100)) : 0;
