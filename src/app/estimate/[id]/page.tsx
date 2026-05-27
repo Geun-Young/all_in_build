@@ -57,9 +57,9 @@ interface QuantityModalProps {
 function QuantityModal({ price, onConfirm, onClose }: QuantityModalProps) {
   const [quantity, setQuantity] = useState(1);
 
-  const labor    = Math.round(price.labor_price    * quantity);
-  const material = Math.round(price.material_price * quantity);
-  const expense  = Math.round(price.expense_price  * quantity);
+  const labor    = Math.floor(price.labor_price    * quantity);
+  const material = Math.floor(price.material_price * quantity);
+  const expense  = Math.floor(price.expense_price  * quantity);
   const total    = labor + material + expense;
 
   return (
@@ -184,9 +184,9 @@ export default function EstimateDetailPage() {
 
   // 공종 추가 — 품셈 계산된 단위단가 × 수량
   function handleAddItem(price: WorkTypeResult, quantity: number) {
-    const labor    = Math.round(price.labor_price    * quantity);
-    const material = Math.round(price.material_price * quantity);
-    const expense  = Math.round(price.expense_price  * quantity);
+    const labor    = Math.floor(price.labor_price    * quantity);
+    const material = Math.floor(price.material_price * quantity);
+    const expense  = Math.floor(price.expense_price  * quantity);
     const newItem: EstimateItem = {
       id:              `item-${Date.now()}`,
       estimate_id:     id,
