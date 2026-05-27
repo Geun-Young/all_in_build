@@ -6,13 +6,15 @@
 - Local:         http://localhost:3000
 - Network:       http://121.184.125.206:3000
 - Environments: .env.local
-✓ Ready in 516ms
+✓ Ready in 526ms
 
- GET /api/estimate/search?q=%ED%84%B0%ED%8C%8C%EA%B8%B0&night=false 200 in 1458ms (next.js: 758ms, application-code: 700ms)
- GET / 307 in 2.6s (next.js: 2.4s, application-code: 188ms)
- GET /api/v1/users/search 404 in 457ms (next.js: 410ms, application-code: 48ms)
- GET / 307 in 38ms (next.js: 3ms, application-code: 35ms)
- GET / 307 in 33ms (next.js: 1818µs, application-code: 31ms)
- GET / 307 in 37ms (next.js: 1797µs, application-code: 35ms)
- GET / 307 in 34ms (next.js: 1839µs, application-code: 32ms)
- GET / 307 in 32ms (next.js: 1827µs, application-code: 30ms)
+ GET /api/estimate/search?q=%ED%84%B0%ED%8C%8C%EA%B8%B0&night=false 200 in 948ms (next.js: 134ms, application-code: 813ms)
+ GET / 307 in 220ms (next.js: 73ms, application-code: 147ms)
+ GET / 307 in 143ms (next.js: 48ms, application-code: 95ms)
+ GET /dashboard 200 in 203ms (next.js: 123ms, application-code: 80ms)
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+ POST /formaction 404 in 276ms (next.js: 45ms, application-code: 231ms)
+✓ Compiled in 513ms
+✓ Compiled in 147ms
