@@ -68,6 +68,7 @@ export interface WorkTypeResult extends WorkType {
   material_price: number;
   expense_price: number;
   is_night: boolean;
+  components?: WorkComponent[];
 }
 
 export interface Estimate {

@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { EstimateItem, WorkTypeResult } from '@/types';
 import { exportEstimateToExcel } from '@/lib/exportExcel';
+import Link from 'next/link';
 import {
   ArrowLeft, Download, CheckCircle, X, Search, Sun, Moon,
-  Plus, Trash2, ChevronDown, Calculator,
+  Plus, Trash2, ChevronDown, Calculator, Wrench,
 } from 'lucide-react';
 
 function fmt(n: number) { return n.toLocaleString('ko-KR'); }
@@ -54,13 +55,21 @@ interface QuantityModalProps {
   onClose: () => void;
 }
 
+const COMPONENT_TYPE_LABEL: Record<string, string> = {
+  labor: '노무', material: '재료', equipment: '장비',
+  fixed_labor: '노무', fixed_material: '재료', fixed_expense: '경비',
+};
+
 function QuantityModal({ price, onConfirm, onClose }: QuantityModalProps) {
   const [quantity, setQuantity] = useState(1);
+  const [showComponents, setShowComponents] = useState(false);
 
   const labor    = Math.floor(price.labor_price    * quantity);
   const material = Math.floor(price.material_price * quantity);
   const expense  = Math.floor(price.expense_price  * quantity);
   const total    = labor + material + expense;
+
+  const hasComponents = price.components && price.components.length > 0;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -77,6 +86,40 @@ function QuantityModal({ price, onConfirm, onClose }: QuantityModalProps) {
             <X size={18} />
           </button>
         </div>
+
+        {/* 품셈 구성요소 */}
+        {hasComponents && (
+          <div className="mb-3">
+            <button
+              onClick={() => setShowComponents((v) => !v)}
+              className="flex items-center gap-1 text-xs text-[#1e3a5f] hover:underline"
+            >
+              <ChevronDown size={12} className={`transition-transform ${showComponents ? 'rotate-180' : ''}`} />
+              품셈 구성요소 {showComponents ? '접기' : '보기'}
+            </button>
+            {showComponents && (
+              <div className="mt-2 bg-[#f0f4f9] rounded-lg p-3 space-y-1">
+                {price.components!.sort((a, b) => a.sort_order - b.sort_order).map((c) => (
+                  <div key={c.id} className="flex justify-between text-xs">
+                    <span className="text-[#374151]">
+                      <span className="text-[#9ca3af] mr-1">[{COMPONENT_TYPE_LABEL[c.component_type] ?? c.component_type}]</span>
+                      {c.component_name}
+                    </span>
+                    <span className="text-[#1e3a5f] font-medium tabular-nums">
+                      {c.quantity}{c.unit}
+                    </span>
+                  </div>
+                ))}
+                {price.expense_rate > 0 && (
+                  <div className="flex justify-between text-xs pt-1 border-t border-[#dbeafe]">
+                    <span className="text-[#9ca3af]">공구손료</span>
+                    <span className="text-[#9ca3af]">{price.expense_base === 'labor' ? '노무비' : '(노무+재료)'}×{price.expense_rate}%</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="space-y-3 mb-5">
           <div className="flex items-center justify-between text-sm">
@@ -419,6 +462,12 @@ export default function EstimateDetailPage() {
         </span>
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          <Link
+            href="/machine-costs"
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-[#e5e7eb] rounded-lg text-[#374151] hover:bg-[#f3f4f6] transition-colors"
+          >
+            <Wrench size={13} /> 기계경비
+          </Link>
           <button
             onClick={() => {
               const p = new URLSearchParams({

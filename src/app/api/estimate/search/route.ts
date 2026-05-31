@@ -5,14 +5,43 @@ import { WorkComponent, WorkTypeResult } from '@/types';
 
 // work_types 테이블이 없을 때 사용하는 더미 (품셈 기반 계산 결과)
 const DUMMY_WORK_TYPES: Omit<WorkTypeResult, 'is_night'>[] = [
-  { id: 'd1', code: '6-2-2',   category: '배관공', name: 'KP매커니컬접합', spec: 'Φ150mm',    unit: '개소', expense_rate: 2, expense_base: 'labor', night_surcharge: 87.5, unit_price: 32941,  labor_price: 32296,  material_price: 645,  expense_price: 0 },
-  { id: 'd2', code: '6-2-2',   category: '배관공', name: 'KP매커니컬접합', spec: 'Φ200mm',    unit: '개소', expense_rate: 2, expense_base: 'labor', night_surcharge: 87.5, unit_price: 52760,  labor_price: 51731,  material_price: 1029, expense_price: 0 },
-  { id: 'd3', code: '6-2-2',   category: '배관공', name: 'KP매커니컬접합', spec: 'Φ300mm',    unit: '개소', expense_rate: 2, expense_base: 'labor', night_surcharge: 87.5, unit_price: 80974,  labor_price: 79387,  material_price: 1587, expense_price: 0 },
-  { id: 'd4', code: '6-2-2-T', category: '배관공', name: '이탈방지접합',   spec: 'Φ150mm',    unit: '개소', expense_rate: 2, expense_base: 'labor', night_surcharge: 87.5, unit_price: 42824,  labor_price: 41985,  material_price: 839,  expense_price: 0 },
-  { id: 'd5', code: '6-2-2-T', category: '배관공', name: '이탈방지접합',   spec: 'Φ200mm',    unit: '개소', expense_rate: 2, expense_base: 'labor', night_surcharge: 87.5, unit_price: 68575,  labor_price: 67230,  material_price: 1345, expense_price: 0 },
-  { id: 'd6', code: '6-2-3',   category: '배관공', name: '주철관절단',     spec: 'Φ150mm',    unit: '개소', expense_rate: 5, expense_base: 'labor', night_surcharge: 87.5, unit_price: 24931,  labor_price: 23744,  material_price: 1187, expense_price: 0 },
-  { id: 'd7', code: '6-2-3',   category: '배관공', name: '주철관절단',     spec: 'Φ300mm',    unit: '개소', expense_rate: 5, expense_base: 'labor', night_surcharge: 87.5, unit_price: 39890,  labor_price: 37991,  material_price: 1899, expense_price: 0 },
-  { id: 'd8', code: '6-2-3',   category: '배관공', name: '주철관절단',     spec: 'Φ800mm',    unit: '개소', expense_rate: 5, expense_base: 'labor', night_surcharge: 87.5, unit_price: 100680, labor_price: 95838,  material_price: 4842, expense_price: 0 },
+  { id: 'd1', code: '6-2-2',   category: '배관공', name: 'KP매커니컬접합', spec: 'Φ150mm', unit: '개소', expense_rate: 2, expense_base: 'labor', night_surcharge: 87.5, unit_price: 32941,  labor_price: 32296,  material_price: 645,  expense_price: 0,
+    components: [
+      { id: 'c1-1', work_type_id: 'd1', component_type: 'labor', component_name: '배관공(수도)', quantity: 0.1,  unit: '인', sort_order: 1 },
+      { id: 'c1-2', work_type_id: 'd1', component_type: 'labor', component_name: '보통인부',     quantity: 0.05, unit: '인', sort_order: 2 },
+    ] },
+  { id: 'd2', code: '6-2-2',   category: '배관공', name: 'KP매커니컬접합', spec: 'Φ200mm', unit: '개소', expense_rate: 2, expense_base: 'labor', night_surcharge: 87.5, unit_price: 52760,  labor_price: 51731,  material_price: 1029, expense_price: 0,
+    components: [
+      { id: 'c2-1', work_type_id: 'd2', component_type: 'labor', component_name: '배관공(수도)', quantity: 0.16, unit: '인', sort_order: 1 },
+      { id: 'c2-2', work_type_id: 'd2', component_type: 'labor', component_name: '보통인부',     quantity: 0.08, unit: '인', sort_order: 2 },
+    ] },
+  { id: 'd3', code: '6-2-2',   category: '배관공', name: 'KP매커니컬접합', spec: 'Φ300mm', unit: '개소', expense_rate: 2, expense_base: 'labor', night_surcharge: 87.5, unit_price: 80974,  labor_price: 79387,  material_price: 1587, expense_price: 0,
+    components: [
+      { id: 'c3-1', work_type_id: 'd3', component_type: 'labor', component_name: '배관공(수도)', quantity: 0.25, unit: '인', sort_order: 1 },
+      { id: 'c3-2', work_type_id: 'd3', component_type: 'labor', component_name: '보통인부',     quantity: 0.12, unit: '인', sort_order: 2 },
+    ] },
+  { id: 'd4', code: '6-2-2-T', category: '배관공', name: '이탈방지접합',   spec: 'Φ150mm', unit: '개소', expense_rate: 2, expense_base: 'labor', night_surcharge: 87.5, unit_price: 42824,  labor_price: 41985,  material_price: 839,  expense_price: 0,
+    components: [
+      { id: 'c4-1', work_type_id: 'd4', component_type: 'labor', component_name: '배관공(수도)', quantity: 0.13,  unit: '인', sort_order: 1 },
+      { id: 'c4-2', work_type_id: 'd4', component_type: 'labor', component_name: '보통인부',     quantity: 0.065, unit: '인', sort_order: 2 },
+    ] },
+  { id: 'd5', code: '6-2-2-T', category: '배관공', name: '이탈방지접합',   spec: 'Φ200mm', unit: '개소', expense_rate: 2, expense_base: 'labor', night_surcharge: 87.5, unit_price: 68575,  labor_price: 67230,  material_price: 1345, expense_price: 0,
+    components: [
+      { id: 'c5-1', work_type_id: 'd5', component_type: 'labor', component_name: '배관공(수도)', quantity: 0.21,  unit: '인', sort_order: 1 },
+      { id: 'c5-2', work_type_id: 'd5', component_type: 'labor', component_name: '보통인부',     quantity: 0.105, unit: '인', sort_order: 2 },
+    ] },
+  { id: 'd6', code: '6-2-3',   category: '배관공', name: '주철관절단',     spec: 'Φ150mm', unit: '개소', expense_rate: 5, expense_base: 'labor', night_surcharge: 87.5, unit_price: 24931,  labor_price: 23744,  material_price: 1187, expense_price: 0,
+    components: [
+      { id: 'c6-1', work_type_id: 'd6', component_type: 'labor', component_name: '배관공(수도)', quantity: 0.1, unit: '인', sort_order: 1 },
+    ] },
+  { id: 'd7', code: '6-2-3',   category: '배관공', name: '주철관절단',     spec: 'Φ300mm', unit: '개소', expense_rate: 5, expense_base: 'labor', night_surcharge: 87.5, unit_price: 39890,  labor_price: 37991,  material_price: 1899, expense_price: 0,
+    components: [
+      { id: 'c7-1', work_type_id: 'd7', component_type: 'labor', component_name: '배관공(수도)', quantity: 0.16, unit: '인', sort_order: 1 },
+    ] },
+  { id: 'd8', code: '6-2-3',   category: '배관공', name: '주철관절단',     spec: 'Φ800mm', unit: '개소', expense_rate: 5, expense_base: 'labor', night_surcharge: 87.5, unit_price: 100680, labor_price: 95838,  material_price: 4842, expense_price: 0,
+    components: [
+      { id: 'c8-1', work_type_id: 'd8', component_type: 'labor', component_name: '배관공(수도)', quantity: 0.4, unit: '인', sort_order: 1 },
+    ] },
 ];
 
 function applyNight(base: Omit<WorkTypeResult, 'is_night'>, isNight: boolean): WorkTypeResult {
@@ -90,6 +119,7 @@ export async function GET(req: NextRequest) {
         material_price: prices.material,
         expense_price: prices.expense,
         is_night:      isNight,
+        components,
       };
     });
 
