@@ -855,7 +855,13 @@ export default function ProjectPage() {
                         const categories = Array.from(new Set(workTypes.map((w) => w.category)));
                         let rowNum = 0;
                         return categories.flatMap((cat) => {
-                          const rows = workTypes.filter((w) => w.category === cat);
+                          const rows = workTypes
+                            .filter((w) => w.category === cat)
+                            .sort((a, b) => {
+                              const nameComp = a.name.localeCompare(b.name, 'ko');
+                              if (nameComp !== 0) return nameComp;
+                              return (a.is_night ? 1 : 0) - (b.is_night ? 1 : 0);
+                            });
                           return [
                             <tr key={`gh-${cat}`} className="bg-[#f0f4f9] border-y border-[#e5e7eb]">
                               <td colSpan={8} className="px-4 py-2.5 font-semibold text-[#374151]" style={{ fontSize: '16px' }}>{cat}</td>
@@ -867,7 +873,7 @@ export default function ProjectPage() {
                                 <tr key={w.id} className="border-b border-[#f3f4f6] hover:bg-[#f8fafc]" style={{ height: '48px' }}>
                                   <td className="px-3 text-[#9ca3af]" style={{ fontSize: '16px' }}>{n}</td>
                                   <td className="px-3 text-[#111827]" style={{ fontSize: '16px' }}>
-                                    {w.name}{w.is_night && <span className="ml-1">🌙</span>}
+                                    {w.name}
                                   </td>
                                   <td className="px-3 text-[#6b7280]" style={{ fontSize: '16px' }}>{w.spec}</td>
                                   <td className="px-3 text-[#6b7280]" style={{ fontSize: '16px' }}>{w.unit}</td>
