@@ -76,7 +76,7 @@ export default function Sidebar() {
       {/* 로고 */}
       <div className="h-16 flex items-center px-5 border-b border-[#e5e7eb]">
         <Link href="/">
-          <Image src="/logo.png" alt="All-In Build" width={140} height={40} priority />
+          <Image src="/new_logo.png" alt="All-In Build" width={140} height={40} priority />
         </Link>
       </div>
 
