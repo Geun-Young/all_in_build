@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { EstimateItem, WorkTypeResult, Project, WorkRecord } from '@/types';
 import { exportEstimateToExcel } from '@/lib/exportExcel';
+import { calcFinalAmount } from '@/lib/calcFinalAmount';
 import Badge from '@/components/ui/Badge';
 import AddWorkModal, { WorkFormData } from '@/components/features/AddWorkModal';
 import {
@@ -117,7 +118,6 @@ function QuantityModal({ price, onConfirm, onClose }: QuantityModalProps) {
             <span className="text-[#6b7280]" style={{ fontSize: '15px' }}>단위단가</span>
             <span className="font-medium text-[#1e3a5f]" style={{ fontSize: '15px' }}>{fmt(price.unit_price)}원/{price.unit}</span>
           </div>
-
           <div>
             <label className="text-[#6b7280] mb-1 block" style={{ fontSize: '14px' }}>수량</label>
             <input
@@ -130,7 +130,6 @@ function QuantityModal({ price, onConfirm, onClose }: QuantityModalProps) {
               style={{ fontSize: '16px', height: '48px' }}
             />
           </div>
-
           <div className="bg-[#f8fafc] rounded-lg p-3 space-y-1.5">
             <div className="flex justify-between" style={{ fontSize: '14px' }}>
               <span className="text-[#9ca3af]">노무비</span>
@@ -173,6 +172,34 @@ function QuantityModal({ price, onConfirm, onClose }: QuantityModalProps) {
   );
 }
 
+// ── 원가계산서 행 컴포넌트 ────────────────────────────
+interface CostRowProps {
+  label: string;
+  rate?: string;
+  sym?: string;
+  value: number;
+  bold?: boolean;
+  accent?: boolean;
+  sub?: boolean;
+}
+
+function CostRow({ label, rate, sym, value, bold, accent, sub }: CostRowProps) {
+  return (
+    <tr className={accent ? 'bg-[#f0f4f9]' : ''}>
+      <td className={`px-4 py-2.5 ${sub ? 'pl-8 text-[#6b7280]' : bold ? 'font-semibold text-[#111827]' : 'text-[#374151]'}`}
+          style={{ fontSize: '14px' }}>
+        {label}
+        {rate && <span className="ml-1.5 text-[#9ca3af]" style={{ fontSize: '12px' }}>({rate})</span>}
+      </td>
+      <td className="px-3 py-2.5 text-center text-[#9ca3af]" style={{ fontSize: '12px' }}>{sym}</td>
+      <td className={`px-4 py-2.5 text-right tabular-nums ${bold ? 'font-semibold text-[#1e3a5f]' : sub ? 'text-[#6b7280]' : 'text-[#374151]'}`}
+          style={{ fontSize: '14px' }}>
+        {fmt(value)}
+      </td>
+    </tr>
+  );
+}
+
 // ── 메인 페이지 ──────────────────────────────────────
 export default function ProjectPage() {
   const params = useParams();
@@ -180,6 +207,7 @@ export default function ProjectPage() {
   const searchParams = useSearchParams();
   const id = params.id as string;
   const tab = searchParams.get('tab') ?? 'site';
+  const sub = searchParams.get('sub') ?? 'ledger';
 
   const project = DUMMY_PROJECTS.find((p) => p.id === id);
 
@@ -208,6 +236,13 @@ export default function ProjectPage() {
   const [selectedPrice, setSelectedPrice] = useState<WorkTypeResult | null>(null);
   const [estimateSubTab, setEstimateSubTab] = useState<'table' | 'search'>('table');
 
+  // ── 기계경비 상태 ─
+  const [machineCosts, setMachineCosts] = useState<{
+    id: string; name: string; spec: string;
+    labor_cost: number; material_cost: number; expense_cost: number; total_cost: number;
+  }[]>([]);
+  const [mcLoading, setMcLoading] = useState(false);
+
   const nameInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (isEditingName) nameInputRef.current?.focus(); }, [isEditingName]);
 
@@ -228,6 +263,18 @@ export default function ProjectPage() {
     const t = setTimeout(doSearch, 300);
     return () => clearTimeout(t);
   }, [doSearch]);
+
+  // 기계경비 탭 진입 시 데이터 로드
+  useEffect(() => {
+    if (tab === 'estimate' && sub === 'equipment') {
+      setMcLoading(true);
+      fetch('/api/machine-costs')
+        .then((r) => r.json())
+        .then((d) => setMachineCosts(d))
+        .catch(() => setMachineCosts([]))
+        .finally(() => setMcLoading(false));
+    }
+  }, [tab, sub]);
 
   if (!project) {
     return (
@@ -315,6 +362,11 @@ export default function ProjectPage() {
     acc[item.category].push(item);
     return acc;
   }, {});
+
+  // 원가계산서 계산 (costsheet 탭이고 항목이 있을 때만)
+  const costSheet = tab === 'estimate' && sub === 'costsheet' && items.length > 0
+    ? calcFinalAmount(totalMaterial, totalLabor, totalExpense)
+    : null;
 
   return (
     <div className="flex flex-col h-screen" onClick={() => setOpenWorkMenuId(null)}>
@@ -450,7 +502,7 @@ export default function ProjectPage() {
       {/* ─── estimate: 견적관리 ───────────────────────── */}
       {tab === 'estimate' && (
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* 견적 헤더 바 */}
+          {/* 공통 헤더 바 */}
           <div className="bg-white border-b border-[#e5e7eb] px-4 flex items-center gap-3 flex-shrink-0" style={{ height: '60px' }}>
             {isEditingName ? (
               <input
@@ -478,213 +530,380 @@ export default function ProjectPage() {
               {estimateStatus === 'confirmed' ? '확정' : '작성중'}
             </span>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                onClick={() => exportEstimateToExcel({ estimateName, items })}
-                disabled={items.length === 0}
-                className="flex items-center gap-1.5 border border-[#e5e7eb] rounded-lg text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40 transition-colors"
-                style={{ fontSize: '13px', padding: '6px 10px', height: '36px' }}
-              >
-                <Download size={13} /> 엑셀
-              </button>
-              {estimateStatus === 'draft' && (
+            {sub === 'ledger' && (
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <button
-                  onClick={() => setEstimateStatus('confirmed')}
-                  className="flex items-center gap-1.5 bg-[#1e3a5f] text-white rounded-lg hover:bg-[#2d5080] transition-colors"
+                  onClick={() => exportEstimateToExcel({ estimateName, items })}
+                  disabled={items.length === 0}
+                  className="flex items-center gap-1.5 border border-[#e5e7eb] rounded-lg text-[#374151] hover:bg-[#f3f4f6] disabled:opacity-40 transition-colors"
                   style={{ fontSize: '13px', padding: '6px 10px', height: '36px' }}
                 >
-                  <CheckCircle size={13} /> 확정
+                  <Download size={13} /> 엑셀
                 </button>
-              )}
-            </div>
+                {estimateStatus === 'draft' && (
+                  <button
+                    onClick={() => setEstimateStatus('confirmed')}
+                    className="flex items-center gap-1.5 bg-[#1e3a5f] text-white rounded-lg hover:bg-[#2d5080] transition-colors"
+                    style={{ fontSize: '13px', padding: '6px 10px', height: '36px' }}
+                  >
+                    <CheckCircle size={13} /> 확정
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* 모바일 서브탭 */}
-          <div className="md:hidden flex border-b border-[#e5e7eb] bg-white flex-shrink-0">
-            {(['table', 'search'] as const).map((st) => (
-              <button key={st} onClick={() => setEstimateSubTab(st)}
-                className={`flex-1 transition-colors border-b-2 -mb-px ${
-                  estimateSubTab === st ? 'border-[#1e3a5f] text-[#1e3a5f] font-medium' : 'border-transparent text-[#6b7280]'
-                }`}
-                style={{ fontSize: '15px', minHeight: '44px' }}
-              >
-                {st === 'table' ? '내역서' : '공종추가'}
-              </button>
-            ))}
-          </div>
+          {/* ─ 내역서 (ledger) ─ */}
+          {sub === 'ledger' && (
+            <>
+              {/* 모바일 서브탭 */}
+              <div className="md:hidden flex border-b border-[#e5e7eb] bg-white flex-shrink-0">
+                {(['table', 'search'] as const).map((st) => (
+                  <button key={st} onClick={() => setEstimateSubTab(st)}
+                    className={`flex-1 transition-colors border-b-2 -mb-px ${
+                      estimateSubTab === st ? 'border-[#1e3a5f] text-[#1e3a5f] font-medium' : 'border-transparent text-[#6b7280]'
+                    }`}
+                    style={{ fontSize: '15px', minHeight: '44px' }}
+                  >
+                    {st === 'table' ? '내역서' : '공종추가'}
+                  </button>
+                ))}
+              </div>
 
-          {/* 본문 */}
-          <div className="flex-1 flex overflow-hidden">
-            {/* 내역서 테이블 */}
-            <div className={`flex-1 flex flex-col overflow-hidden ${estimateSubTab === 'search' ? 'hidden md:flex' : 'flex'}`}>
-              <div className="flex-1 overflow-auto">
-                <table className="w-full border-collapse min-w-[700px]" style={{ fontSize: '13px' }}>
-                  <thead>
-                    <tr className="bg-[#f0f4f9] border-b border-[#e5e7eb]">
-                      {['번호', '공종', '품명', '규격', '단위', '수량', '단가', '노무비', '재료비', '경비', '합계', ''].map((h) => (
-                        <th key={h} className="px-2 py-2.5 text-left text-[#374151] font-medium whitespace-nowrap first:pl-4">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.keys(groups).length === 0 ? (
-                      <tr>
-                        <td colSpan={12} className="text-center py-12 text-[#9ca3af]" style={{ fontSize: '15px' }}>
-                          우측 패널에서 공종을 검색하여 추가하세요
-                        </td>
-                      </tr>
-                    ) : (
-                      Object.entries(groups).map(([cat, groupItems]) => {
-                        const subLabor    = groupItems.reduce((s, i) => s + i.labor_amount,    0);
-                        const subMaterial = groupItems.reduce((s, i) => s + i.material_amount, 0);
-                        const subExpense  = groupItems.reduce((s, i) => s + i.expense_amount,  0);
-                        const subTotal    = groupItems.reduce((s, i) => s + i.total_amount,    0);
-                        return [
-                          <tr key={`g-${cat}`} className="bg-[#f0f4f9] border-y border-[#e5e7eb]">
-                            <td className="pl-4 py-2 font-medium text-[#374151]" colSpan={7}>[{cat}]</td>
-                            <td className="px-2 py-2 text-[#374151]">{fmt(subLabor)}</td>
-                            <td className="px-2 py-2 text-[#374151]">{fmt(subMaterial)}</td>
-                            <td className="px-2 py-2 text-[#374151]">{fmt(subExpense)}</td>
-                            <td className="px-2 py-2 font-medium text-[#1e3a5f]">{fmt(subTotal)}</td>
+              {/* 테이블 + 검색 패널 */}
+              <div className="flex-1 flex overflow-hidden">
+                <div className={`flex-1 flex flex-col overflow-hidden ${estimateSubTab === 'search' ? 'hidden md:flex' : 'flex'}`}>
+                  <div className="flex-1 overflow-auto">
+                    <table className="w-full border-collapse min-w-[700px]" style={{ fontSize: '13px' }}>
+                      <thead>
+                        <tr className="bg-[#f0f4f9] border-b border-[#e5e7eb]">
+                          {['번호', '공종', '품명', '규격', '단위', '수량', '단가', '노무비', '재료비', '경비', '합계', ''].map((h) => (
+                            <th key={h} className="px-2 py-2.5 text-left text-[#374151] font-medium whitespace-nowrap first:pl-4">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.keys(groups).length === 0 ? (
+                          <tr>
+                            <td colSpan={12} className="text-center py-12 text-[#9ca3af]" style={{ fontSize: '15px' }}>
+                              우측 패널에서 공종을 검색하여 추가하세요
+                            </td>
+                          </tr>
+                        ) : (
+                          Object.entries(groups).map(([cat, groupItems]) => {
+                            const sL = groupItems.reduce((s, i) => s + i.labor_amount, 0);
+                            const sM = groupItems.reduce((s, i) => s + i.material_amount, 0);
+                            const sE = groupItems.reduce((s, i) => s + i.expense_amount, 0);
+                            const sT = groupItems.reduce((s, i) => s + i.total_amount, 0);
+                            return [
+                              <tr key={`g-${cat}`} className="bg-[#f0f4f9] border-y border-[#e5e7eb]">
+                                <td className="pl-4 py-2 font-medium text-[#374151]" colSpan={7}>[{cat}]</td>
+                                <td className="px-2 py-2 text-[#374151]">{fmt(sL)}</td>
+                                <td className="px-2 py-2 text-[#374151]">{fmt(sM)}</td>
+                                <td className="px-2 py-2 text-[#374151]">{fmt(sE)}</td>
+                                <td className="px-2 py-2 font-medium text-[#1e3a5f]">{fmt(sT)}</td>
+                                <td />
+                              </tr>,
+                              ...groupItems.map((item, idx) => (
+                                <tr key={item.id} className="border-b border-[#f3f4f6] hover:bg-[#f8fafc] group">
+                                  <td className="pl-4 py-2 text-[#9ca3af]">{idx + 1}</td>
+                                  <td className="px-2 py-2 text-[#6b7280]">{item.category}</td>
+                                  <td className="px-2 py-2 text-[#111827]">
+                                    {item.work_name}
+                                    {item.is_night && <span className="ml-1 text-[#6b7280]">(야간)</span>}
+                                  </td>
+                                  <td className="px-2 py-2 text-[#6b7280]">{item.spec}</td>
+                                  <td className="px-2 py-2 text-[#6b7280]">{item.unit}</td>
+                                  <td className="px-2 py-2 text-[#374151]">{item.quantity}</td>
+                                  <td className="px-2 py-2 text-[#374151]">{fmt(item.unit_price)}</td>
+                                  <td className="px-2 py-2 text-[#374151]">{fmt(item.labor_amount)}</td>
+                                  <td className="px-2 py-2 text-[#374151]">{fmt(item.material_amount)}</td>
+                                  <td className="px-2 py-2 text-[#374151]">{fmt(item.expense_amount)}</td>
+                                  <td className="px-2 py-2 font-medium text-[#1e3a5f]">{fmt(item.total_amount)}</td>
+                                  <td className="px-2 py-2">
+                                    <button
+                                      onClick={() => handleDeleteItem(item.id)}
+                                      className="opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-red-500 transition-all"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              )),
+                            ];
+                          })
+                        )}
+                      </tbody>
+                      {items.length > 0 && (
+                        <tfoot>
+                          <tr className="bg-[#f0f4f9] border-t-2 border-[#1e3a5f]">
+                            <td className="pl-4 py-2.5 font-semibold text-[#111827]" colSpan={7}>합계</td>
+                            <td className="px-2 py-2.5 font-semibold text-[#374151]">{fmt(totalLabor)}</td>
+                            <td className="px-2 py-2.5 font-semibold text-[#374151]">{fmt(totalMaterial)}</td>
+                            <td className="px-2 py-2.5 font-semibold text-[#374151]">{fmt(totalExpense)}</td>
+                            <td className="px-2 py-2.5 font-bold text-[#1e3a5f]">{fmt(totalAmount)}</td>
                             <td />
-                          </tr>,
-                          ...groupItems.map((item, idx) => (
-                            <tr key={item.id} className="border-b border-[#f3f4f6] hover:bg-[#f8fafc] group">
-                              <td className="pl-4 py-2 text-[#9ca3af]">{idx + 1}</td>
-                              <td className="px-2 py-2 text-[#6b7280]">{item.category}</td>
-                              <td className="px-2 py-2 text-[#111827]">
-                                {item.work_name}
-                                {item.is_night && <span className="ml-1 text-[#6b7280]">(야간)</span>}
-                              </td>
-                              <td className="px-2 py-2 text-[#6b7280]">{item.spec}</td>
-                              <td className="px-2 py-2 text-[#6b7280]">{item.unit}</td>
-                              <td className="px-2 py-2 text-[#374151]">{item.quantity}</td>
-                              <td className="px-2 py-2 text-[#374151]">{fmt(item.unit_price)}</td>
-                              <td className="px-2 py-2 text-[#374151]">{fmt(item.labor_amount)}</td>
-                              <td className="px-2 py-2 text-[#374151]">{fmt(item.material_amount)}</td>
-                              <td className="px-2 py-2 text-[#374151]">{fmt(item.expense_amount)}</td>
-                              <td className="px-2 py-2 font-medium text-[#1e3a5f]">{fmt(item.total_amount)}</td>
-                              <td className="px-2 py-2">
-                                <button
-                                  onClick={() => handleDeleteItem(item.id)}
-                                  className="opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-red-500 transition-all"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </td>
-                            </tr>
-                          )),
-                        ];
-                      })
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                  <div className="border-t border-[#e5e7eb] p-3 flex-shrink-0 md:hidden">
+                    <button onClick={() => setEstimateSubTab('search')}
+                      className="flex items-center gap-1.5 text-[#6b7280] hover:text-[#1e3a5f] transition-colors"
+                      style={{ fontSize: '14px' }}
+                    >
+                      <Plus size={14} /> 공종 추가
+                    </button>
+                  </div>
+                </div>
+
+                {/* 검색 패널 */}
+                <div className={`w-full md:w-[40%] md:max-w-sm border-l border-[#e5e7eb] flex flex-col overflow-hidden ${
+                  estimateSubTab === 'table' ? 'hidden md:flex' : 'flex'
+                }`}>
+                  <div className="p-4 border-b border-[#e5e7eb]">
+                    <h2 className="text-[#111827] font-medium mb-3" style={{ fontSize: '15px' }}>공종 추가 (품셈 기반)</h2>
+                    <div className="relative mb-2">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca3af]" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="공종명 또는 품셈코드 검색..."
+                        className="w-full pl-8 pr-3 border border-[#e5e7eb] rounded-lg focus:outline-none focus:border-[#1e3a5f]"
+                        style={{ fontSize: '15px', height: '44px' }}
+                      />
+                    </div>
+                    <div className="flex gap-1 mb-2">
+                      {[false, true].map((night) => (
+                        <button
+                          key={String(night)}
+                          onClick={() => setIsNightSearch(night)}
+                          className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg transition-colors ${
+                            isNightSearch === night
+                              ? 'bg-[#1e3a5f] text-white'
+                              : 'border border-[#e5e7eb] text-[#6b7280] hover:bg-[#f3f4f6]'
+                          }`}
+                          style={{ fontSize: '14px', height: '40px' }}
+                        >
+                          {night ? <><Moon size={13} /> 야간</> : <><Sun size={13} /> 주간</>}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="relative">
+                      <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="w-full border border-[#e5e7eb] rounded-lg px-3 text-[#374151] appearance-none focus:outline-none focus:border-[#1e3a5f]"
+                        style={{ fontSize: '14px', height: '40px' }}
+                      >
+                        {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                      </select>
+                      <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9ca3af] pointer-events-none" />
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto">
+                    {isSearching ? (
+                      <p className="text-center text-[#9ca3af] py-8" style={{ fontSize: '14px' }}>검색 중...</p>
+                    ) : searchResults.length === 0 ? (
+                      <p className="text-center text-[#9ca3af] py-8" style={{ fontSize: '14px' }}>검색 결과가 없습니다</p>
+                    ) : (
+                      <div className="divide-y divide-[#f3f4f6]">
+                        {searchResults.map((wt) => (
+                          <button
+                            key={wt.id}
+                            onClick={() => setSelectedPrice(wt)}
+                            className="w-full text-left px-4 py-3 hover:bg-[#f8fafc] transition-colors"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-[#111827] truncate" style={{ fontSize: '14px' }}>{wt.name}</p>
+                                <p className="text-[#9ca3af] mt-0.5" style={{ fontSize: '13px' }}>
+                                  {wt.spec} / {wt.unit}
+                                  <span className="mx-1.5 text-[#d1d5db]">|</span>
+                                  노무 {fmt(wt.labor_price)} + 경비 {fmt(wt.expense_price)}
+                                </p>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <p className="font-semibold text-[#1e3a5f]" style={{ fontSize: '14px' }}>{fmt(wt.unit_price)}원</p>
+                                <p className="text-[#9ca3af]" style={{ fontSize: '12px' }}>/{wt.unit}</p>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     )}
-                  </tbody>
-                  {items.length > 0 && (
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ─ 내역서총괄표 (summary) ─ */}
+          {sub === 'summary' && (
+            <div className="flex-1 overflow-auto p-5">
+              {items.length === 0 ? (
+                <p className="text-center text-[#9ca3af] py-16" style={{ fontSize: '15px' }}>
+                  내역서에 항목이 없습니다.
+                </p>
+              ) : (
+                <div className="bg-white border border-[#e5e7eb] rounded-xl overflow-hidden">
+                  <table className="w-full border-collapse" style={{ fontSize: '14px' }}>
+                    <thead>
+                      <tr className="bg-[#f0f4f9] border-b border-[#e5e7eb]">
+                        {['공종', '노무비', '재료비', '경비', '합계'].map((h) => (
+                          <th key={h} className="px-4 py-2.5 text-left text-[#374151] font-medium">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#f3f4f6]">
+                      {Object.entries(groups).map(([cat, groupItems]) => {
+                        const sL = groupItems.reduce((s, i) => s + i.labor_amount, 0);
+                        const sM = groupItems.reduce((s, i) => s + i.material_amount, 0);
+                        const sE = groupItems.reduce((s, i) => s + i.expense_amount, 0);
+                        const sT = groupItems.reduce((s, i) => s + i.total_amount, 0);
+                        return (
+                          <tr key={cat} className="hover:bg-[#f8fafc]">
+                            <td className="px-4 py-3 text-[#374151] font-medium">{cat}</td>
+                            <td className="px-4 py-3 text-[#374151] tabular-nums">{fmt(sL)}</td>
+                            <td className="px-4 py-3 text-[#374151] tabular-nums">{fmt(sM)}</td>
+                            <td className="px-4 py-3 text-[#374151] tabular-nums">{fmt(sE)}</td>
+                            <td className="px-4 py-3 font-semibold text-[#1e3a5f] tabular-nums">{fmt(sT)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
                     <tfoot>
                       <tr className="bg-[#f0f4f9] border-t-2 border-[#1e3a5f]">
-                        <td className="pl-4 py-2.5 font-semibold text-[#111827]" colSpan={7}>합계</td>
-                        <td className="px-2 py-2.5 font-semibold text-[#374151]">{fmt(totalLabor)}</td>
-                        <td className="px-2 py-2.5 font-semibold text-[#374151]">{fmt(totalMaterial)}</td>
-                        <td className="px-2 py-2.5 font-semibold text-[#374151]">{fmt(totalExpense)}</td>
-                        <td className="px-2 py-2.5 font-bold text-[#1e3a5f]">{fmt(totalAmount)}</td>
-                        <td />
+                        <td className="px-4 py-2.5 font-semibold text-[#111827]">합계</td>
+                        <td className="px-4 py-2.5 font-semibold text-[#374151] tabular-nums">{fmt(totalLabor)}</td>
+                        <td className="px-4 py-2.5 font-semibold text-[#374151] tabular-nums">{fmt(totalMaterial)}</td>
+                        <td className="px-4 py-2.5 font-semibold text-[#374151] tabular-nums">{fmt(totalExpense)}</td>
+                        <td className="px-4 py-2.5 font-bold text-[#1e3a5f] tabular-nums">{fmt(totalAmount)}</td>
                       </tr>
                     </tfoot>
-                  )}
-                </table>
-              </div>
-              <div className="border-t border-[#e5e7eb] p-3 flex-shrink-0 md:hidden">
-                <button onClick={() => setEstimateSubTab('search')}
-                  className="flex items-center gap-1.5 text-[#6b7280] hover:text-[#1e3a5f] transition-colors"
-                  style={{ fontSize: '14px' }}
-                >
-                  <Plus size={14} /> 공종 추가
-                </button>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─ 일위대가총괄표 / 단가산출총괄표 placeholder ─ */}
+          {(sub === 'unitprice' || sub === 'calculation') && (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center space-y-2">
+                <p className="text-[#9ca3af]" style={{ fontSize: '18px' }}>
+                  {sub === 'unitprice' ? '일위대가총괄표' : '단가산출총괄표'} 준비 중
+                </p>
+                <p className="text-[#d1d5db]" style={{ fontSize: '14px' }}>다음 업데이트에서 제공됩니다</p>
               </div>
             </div>
+          )}
 
-            {/* 검색 패널 */}
-            <div className={`w-full md:w-[40%] md:max-w-sm border-l border-[#e5e7eb] flex flex-col overflow-hidden ${
-              estimateSubTab === 'table' ? 'hidden md:flex' : 'flex'
-            }`}>
-              <div className="p-4 border-b border-[#e5e7eb]">
-                <h2 className="text-[#111827] font-medium mb-3" style={{ fontSize: '15px' }}>공종 추가 (품셈 기반)</h2>
-
-                <div className="relative mb-2">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca3af]" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="공종명 또는 품셈코드 검색..."
-                    className="w-full pl-8 pr-3 border border-[#e5e7eb] rounded-lg focus:outline-none focus:border-[#1e3a5f]"
-                    style={{ fontSize: '15px', height: '44px' }}
-                  />
-                </div>
-
-                <div className="flex gap-1 mb-2">
-                  {[false, true].map((night) => (
-                    <button
-                      key={String(night)}
-                      onClick={() => setIsNightSearch(night)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg transition-colors ${
-                        isNightSearch === night
-                          ? 'bg-[#1e3a5f] text-white'
-                          : 'border border-[#e5e7eb] text-[#6b7280] hover:bg-[#f3f4f6]'
-                      }`}
-                      style={{ fontSize: '14px', height: '40px' }}
-                    >
-                      {night ? <><Moon size={13} /> 야간</> : <><Sun size={13} /> 주간</>}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="relative">
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full border border-[#e5e7eb] rounded-lg px-3 text-[#374151] appearance-none focus:outline-none focus:border-[#1e3a5f]"
-                    style={{ fontSize: '14px', height: '40px' }}
-                  >
-                    {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                  </select>
-                  <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9ca3af] pointer-events-none" />
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto">
-                {isSearching ? (
-                  <p className="text-center text-[#9ca3af] py-8" style={{ fontSize: '14px' }}>검색 중...</p>
-                ) : searchResults.length === 0 ? (
-                  <p className="text-center text-[#9ca3af] py-8" style={{ fontSize: '14px' }}>검색 결과가 없습니다</p>
+          {/* ─ 기계경비총괄표 (equipment) ─ */}
+          {sub === 'equipment' && (
+            <div className="flex-1 overflow-auto p-4 sm:p-5">
+              <div className="max-w-4xl mx-auto space-y-4">
+                {mcLoading ? (
+                  <p className="text-center text-[#9ca3af] py-16" style={{ fontSize: '15px' }}>불러오는 중...</p>
                 ) : (
-                  <div className="divide-y divide-[#f3f4f6]">
-                    {searchResults.map((wt) => (
-                      <button
-                        key={wt.id}
-                        onClick={() => setSelectedPrice(wt)}
-                        className="w-full text-left px-4 py-3 hover:bg-[#f8fafc] transition-colors"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-[#111827] truncate" style={{ fontSize: '14px' }}>{wt.name}</p>
-                            <p className="text-[#9ca3af] mt-0.5" style={{ fontSize: '13px' }}>
-                              {wt.spec} / {wt.unit}
-                              <span className="mx-1.5 text-[#d1d5db]">|</span>
-                              노무 {fmt(wt.labor_price)} + 경비 {fmt(wt.expense_price)}
-                            </p>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="font-semibold text-[#1e3a5f]" style={{ fontSize: '14px' }}>{fmt(wt.unit_price)}원</p>
-                            <p className="text-[#9ca3af]" style={{ fontSize: '12px' }}>/{wt.unit}</p>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                  <>
+                    <div className="bg-white border border-[#e5e7eb] rounded-xl overflow-hidden">
+                      <table className="w-full border-collapse" style={{ fontSize: '13px' }}>
+                        <thead>
+                          <tr className="bg-[#f0f4f9] border-b border-[#e5e7eb]">
+                            {['장비명', '규격', '노무비', '재료비', '경비', '합계 (hr)'].map((h) => (
+                              <th key={h} className="px-3 py-2.5 text-left text-[#374151] font-medium">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#f3f4f6]">
+                          {machineCosts.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="text-center py-12 text-[#9ca3af]">데이터가 없습니다</td>
+                            </tr>
+                          ) : (
+                            machineCosts.map((m, i) => (
+                              <tr key={m.id} className={i % 2 === 0 ? '' : 'bg-[#fafafa]'}>
+                                <td className="px-3 py-2.5 text-[#111827] font-medium">{m.name}</td>
+                                <td className="px-3 py-2.5 text-[#6b7280]">{m.spec}</td>
+                                <td className="px-3 py-2.5 text-right text-[#374151] tabular-nums">
+                                  {m.labor_cost > 0 ? fmt(m.labor_cost) : <span className="text-[#d1d5db]">—</span>}
+                                </td>
+                                <td className="px-3 py-2.5 text-right text-[#374151] tabular-nums">{fmt(m.material_cost)}</td>
+                                <td className="px-3 py-2.5 text-right text-[#374151] tabular-nums">{fmt(m.expense_cost)}</td>
+                                <td className="px-3 py-2.5 text-right font-semibold text-[#1e3a5f] tabular-nums">{fmt(m.total_cost)}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[#9ca3af] px-1" style={{ fontSize: '12px' }}>
+                      경유 1,393원/ℓ · 휘발유 1,511원/ℓ · 달러 1,387.7원 (2025.9.1 기준) · 금액 소수 1미만 절하
+                    </p>
+                  </>
                 )}
               </div>
             </div>
-          </div>
+          )}
+
+          {/* ─ 원가계산서 (costsheet) ─ */}
+          {sub === 'costsheet' && (
+            <div className="flex-1 overflow-auto p-4 sm:p-5">
+              {items.length === 0 ? (
+                <p className="text-center text-[#9ca3af] py-16" style={{ fontSize: '15px' }}>
+                  내역서에 항목을 추가하면 원가계산서가 자동으로 계산됩니다.
+                </p>
+              ) : costSheet && (
+                <div className="max-w-2xl mx-auto">
+                  <table className="w-full bg-white border border-[#e5e7eb] rounded-xl overflow-hidden">
+                    <thead>
+                      <tr className="bg-[#f0f4f9]">
+                        <th className="px-4 py-3 text-left text-[#374151] font-medium" style={{ fontSize: '14px' }}>항목</th>
+                        <th className="px-3 py-3 text-center text-[#374151] font-medium w-8" style={{ fontSize: '14px' }}>기호</th>
+                        <th className="px-4 py-3 text-right text-[#374151] font-medium" style={{ fontSize: '14px' }}>금액 (원)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#f3f4f6]">
+                      <CostRow label="재료비" sym="A" value={costSheet.재료비} bold />
+                      <CostRow label="직접노무비" sym="4" value={costSheet.직접노무비} />
+                      <CostRow label="간접노무비" rate="직접노무비×16.5%" sym="5" value={costSheet.간접노무비} sub />
+                      <CostRow label="노무비 소계" sym="B" value={costSheet.노무비소계} bold />
+                      <CostRow label="직접경비" rate="" sym="6" value={totalExpense} sub />
+                      <CostRow label="산재보험료" rate="노무비×3.56%" value={costSheet.상세.산재보험료} sub />
+                      <CostRow label="고용보험료" rate="노무비×1.01%" value={costSheet.상세.고용보험료} sub />
+                      <CostRow label="건강보험료" rate="직접노무비×3.595%" value={costSheet.상세.건강보험료} sub />
+                      <CostRow label="연금보험료" rate="직접노무비×4.75%" value={costSheet.상세.연금보험료} sub />
+                      <CostRow label="노인장기요양보험료" rate="건강보험료×13.14%" value={costSheet.상세.노인장기요양보험료} sub />
+                      <CostRow label="퇴직공제부금비" rate="직접노무비×2.3%" value={costSheet.상세.퇴직공제부금비} sub />
+                      <CostRow label="건설기계대여금" rate="(A+직접노무비+직접경비)×0.4%" value={costSheet.상세.건설기계대여금} sub />
+                      <CostRow label="산업안전보건관리비" rate="×3.15%" value={costSheet.상세.산업안전보건관리비} sub />
+                      <CostRow label="환경보전비" rate="×0.8%" value={costSheet.상세.환경보전비} sub />
+                      <CostRow label="하도급대금지급보증" rate="×0.081%" value={costSheet.상세.하도급대금지급보증} sub />
+                      <CostRow label="석면분담금" rate="노무비×0.006%" value={costSheet.상세.석면분담금} sub />
+                      <CostRow label="임금채권부담금" rate="노무비×0.09%" value={costSheet.상세.임금채권부담금} sub />
+                      <CostRow label="기타경비" rate="(A+B)×5.2%" value={costSheet.상세.기타경비} sub />
+                      <CostRow label="경비 소계" sym="C" value={costSheet.경비소계} bold />
+                      <CostRow label="순공사원가" rate="A+B+C" sym="D" value={costSheet.순공사원가} bold accent />
+                      <CostRow label="일반관리비" rate="순공사원가×8%" sym="E" value={costSheet.일반관리비} />
+                      <CostRow label="이윤" rate="(B+C+E)×15%" sym="F" value={costSheet.이윤} />
+                      <CostRow label="총원가" rate="D+E+F" sym="G" value={costSheet.총원가} bold />
+                      <CostRow label="부가가치세" rate="총원가×10%" sym="H" value={costSheet.부가가치세} />
+                      <tr className="bg-[#1e3a5f]">
+                        <td className="px-4 py-3.5 text-white font-semibold" style={{ fontSize: '15px' }}>최종 도급액</td>
+                        <td className="px-3 py-3.5 text-center text-[#93c5fd] font-medium" style={{ fontSize: '13px' }}>I</td>
+                        <td className="px-4 py-3.5 text-right text-white font-bold" style={{ fontSize: '17px' }}>
+                          {fmt(costSheet.최종도급액)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -54,11 +54,21 @@ const TABS = [
   { label: '📐 도면설계', value: 'blueprint' },
 ];
 
+const ESTIMATE_SUBS = [
+  { label: '📋 내역서',          value: 'ledger' },
+  { label: '📊 내역서총괄표',    value: 'summary' },
+  { label: '📈 일위대가총괄표',  value: 'unitprice' },
+  { label: '🔧 단가산출총괄표',  value: 'calculation' },
+  { label: '⚙️ 기계경비총괄표', value: 'equipment' },
+  { label: '💼 원가계산서',      value: 'costsheet' },
+];
+
 export default function Sidebar() {
   const params = useParams();
   const searchParams = useSearchParams();
   const id = params.id as string;
   const activeTab = searchParams.get('tab') ?? 'site';
+  const activeSub = searchParams.get('sub') ?? 'ledger';
   const project = DUMMY_PROJECTS.find((p) => p.id === id);
 
   return (
@@ -80,24 +90,53 @@ export default function Sidebar() {
       )}
 
       {/* 탭 메뉴 */}
-      <nav className="flex-1 py-4 px-3 space-y-1">
+      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
         {TABS.map(({ label, value }) => (
-          <Link
-            key={value}
-            href={`/projects/${id}?tab=${value}`}
-            className={cn(
-              'flex items-center gap-3 px-3 py-3 rounded-lg transition-colors relative',
-              activeTab === value
-                ? 'bg-[#f0f4f9] text-[#1e3a5f] font-medium'
-                : 'text-[#6b7280] hover:bg-[#f0f4f9] hover:text-[#1e3a5f]'
+          <div key={value}>
+            <Link
+              href={
+                value === 'estimate'
+                  ? `/projects/${id}?tab=estimate&sub=ledger`
+                  : `/projects/${id}?tab=${value}`
+              }
+              className={cn(
+                'flex items-center gap-3 px-3 py-3 rounded-lg transition-colors relative',
+                activeTab === value
+                  ? 'bg-[#f0f4f9] text-[#1e3a5f] font-medium'
+                  : 'text-[#6b7280] hover:bg-[#f0f4f9] hover:text-[#1e3a5f]'
+              )}
+              style={{ fontSize: '15px' }}
+            >
+              {activeTab === value && value !== 'estimate' && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-[#1e3a5f] rounded-r-full" />
+              )}
+              {label}
+            </Link>
+
+            {/* 견적관리 하위 메뉴 — 견적관리 탭 활성 시 자동 펼쳐짐 */}
+            {value === 'estimate' && activeTab === 'estimate' && (
+              <div className="mt-1 space-y-0.5">
+                {ESTIMATE_SUBS.map((sub) => (
+                  <Link
+                    key={sub.value}
+                    href={`/projects/${id}?tab=estimate&sub=${sub.value}`}
+                    className={cn(
+                      'flex items-center py-2 rounded-lg transition-colors relative',
+                      activeSub === sub.value
+                        ? 'text-[#1e3a5f] font-medium'
+                        : 'text-[#6b7280] hover:text-[#1e3a5f]'
+                    )}
+                    style={{ fontSize: '15px', paddingLeft: '16px' }}
+                  >
+                    {activeSub === sub.value && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-5 bg-[#1e3a5f] rounded-r-full" />
+                    )}
+                    {sub.label}
+                  </Link>
+                ))}
+              </div>
             )}
-            style={{ fontSize: '15px' }}
-          >
-            {activeTab === value && (
-              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-[#1e3a5f] rounded-r-full" />
-            )}
-            {label}
-          </Link>
+          </div>
         ))}
       </nav>
     </aside>
