@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { calcUnitPrice, DEFAULT_LABOR_WAGES } from '@/lib/calcUnitPrice';
-import { WorkComponent } from '@/types';
 
 interface WorkTypeItem {
   id: string;
@@ -43,56 +41,59 @@ export async function GET() {
   if (!supabase) return NextResponse.json(FALLBACK);
 
   try {
-    const { data: workTypes, error } = await supabase
+    // Step 1: work_types 전체 조회 (JOIN 없이)
+    const { data: workTypes, error: wtError } = await supabase
       .from('work_types')
-      .select('*, work_components(*)')
+      .select('id, category, name, spec, unit, is_night')
       .order('category')
       .order('name');
 
-    if (error || !workTypes || workTypes.length === 0) {
+    if (wtError || !workTypes || workTypes.length === 0) {
       return NextResponse.json(FALLBACK);
     }
 
-    const { data: wages } = await supabase.from('labor_wages').select('job_type, unit_price');
-    const laborWages: Record<string, number> = wages
-      ? Object.fromEntries(wages.map((w: { job_type: string; unit_price: number }) => [w.job_type, w.unit_price]))
-      : DEFAULT_LABOR_WAGES;
+    // Step 2: work_components 별도 조회
+    const wtIds = workTypes.map((w: { id: string }) => w.id);
+    const { data: components, error: compError } = await supabase
+      .from('work_components')
+      .select('work_type_id, component_type, quantity')
+      .in('work_type_id', wtIds);
 
-    const results: WorkTypeItem[] = [];
+    if (compError) {
+      return NextResponse.json(FALLBACK);
+    }
 
-    for (const wt of workTypes) {
-      const components = (wt.work_components ?? []) as WorkComponent[];
+    // Step 3: work_type_id별로 fixed_* 타입 합산
+    const compMap: Record<string, { labor: number; material: number; expense: number }> = {};
+    for (const comp of (components ?? []) as { work_type_id: string; component_type: string; quantity: number }[]) {
+      if (!compMap[comp.work_type_id]) {
+        compMap[comp.work_type_id] = { labor: 0, material: 0, expense: 0 };
+      }
+      if (comp.component_type === 'fixed_labor') {
+        compMap[comp.work_type_id].labor += comp.quantity;
+      } else if (comp.component_type === 'fixed_material') {
+        compMap[comp.work_type_id].material += comp.quantity;
+      } else if (comp.component_type === 'fixed_expense') {
+        compMap[comp.work_type_id].expense += comp.quantity;
+      }
+    }
 
-      const dayPrices = calcUnitPrice(components, wt.expense_rate, wt.expense_base, false, laborWages, wt.night_surcharge);
-      results.push({
+    // Step 4: work_type 1개 → 정확히 1행
+    const results: WorkTypeItem[] = (workTypes as { id: string; category: string; name: string; spec: string; unit: string; is_night: boolean }[]).map((wt) => {
+      const p = compMap[wt.id] ?? { labor: 0, material: 0, expense: 0 };
+      return {
         id: wt.id,
         category: wt.category,
         name: wt.name,
         spec: wt.spec,
         unit: wt.unit,
-        is_night: false,
-        labor_price:    dayPrices.labor,
-        material_price: dayPrices.material,
-        expense_price:  dayPrices.expense,
-        total_price:    dayPrices.total,
-      });
-
-      if (wt.night_surcharge > 0) {
-        const nightPrices = calcUnitPrice(components, wt.expense_rate, wt.expense_base, true, laborWages, wt.night_surcharge);
-        results.push({
-          id: `${wt.id}_night`,
-          category: wt.category,
-          name: wt.name,
-          spec: wt.spec,
-          unit: wt.unit,
-          is_night: true,
-          labor_price:    nightPrices.labor,
-          material_price: nightPrices.material,
-          expense_price:  nightPrices.expense,
-          total_price:    nightPrices.total,
-        });
-      }
-    }
+        is_night: wt.is_night,
+        labor_price:    Math.floor(p.labor),
+        material_price: Math.floor(p.material),
+        expense_price:  Math.floor(p.expense),
+        total_price:    Math.floor(p.labor + p.material + p.expense),
+      };
+    });
 
     return NextResponse.json(results);
   } catch {
