@@ -13,6 +13,30 @@ import {
   Trash2, ChevronDown,
 } from 'lucide-react';
 
+interface WorkTypeItem {
+  id: string;
+  category: string;
+  name: string;
+  spec: string;
+  unit: string;
+  is_night: boolean;
+  labor_price: number;
+  material_price: number;
+  expense_price: number;
+  total_price: number;
+}
+
+interface MachineCostItem {
+  id: string;
+  name: string;
+  spec: string;
+  unit: string;
+  labor_price: number;
+  material_price: number;
+  expense_price: number;
+  total_price: number;
+}
+
 // ── 더미 데이터 ───────────────────────────────────────
 const DUMMY_PROJECTS: Project[] = [
   {
@@ -237,11 +261,14 @@ export default function ProjectPage() {
   const [estimateSubTab, setEstimateSubTab] = useState<'table' | 'search'>('table');
 
   // ── 기계경비 상태 ─
-  const [machineCosts, setMachineCosts] = useState<{
-    id: string; name: string; spec: string;
-    labor_cost: number; material_cost: number; expense_cost: number; total_cost: number;
-  }[]>([]);
+  const [machineCosts, setMachineCosts] = useState<MachineCostItem[]>([]);
   const [mcLoading, setMcLoading] = useState(false);
+  const [mcError, setMcError] = useState(false);
+
+  // ── 일위대가 상태 ─
+  const [workTypes, setWorkTypes] = useState<WorkTypeItem[]>([]);
+  const [wtLoading, setWtLoading] = useState(false);
+  const [wtError, setWtError] = useState(false);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (isEditingName) nameInputRef.current?.focus(); }, [isEditingName]);
@@ -268,11 +295,25 @@ export default function ProjectPage() {
   useEffect(() => {
     if (tab === 'estimate' && sub === 'equipment') {
       setMcLoading(true);
-      fetch('/api/machine-costs')
+      setMcError(false);
+      fetch('/api/estimate/machine-costs')
         .then((r) => r.json())
         .then((d) => setMachineCosts(d))
-        .catch(() => setMachineCosts([]))
+        .catch(() => { setMcError(true); setMachineCosts([]); })
         .finally(() => setMcLoading(false));
+    }
+  }, [tab, sub]);
+
+  // 일위대가/단가산출 탭 진입 시 데이터 로드
+  useEffect(() => {
+    if (tab === 'estimate' && (sub === 'unitprice' || sub === 'calculation')) {
+      setWtLoading(true);
+      setWtError(false);
+      fetch('/api/estimate/work-types')
+        .then((r) => r.json())
+        .then((d) => setWorkTypes(d))
+        .catch(() => { setWtError(true); setWorkTypes([]); })
+        .finally(() => setWtLoading(false));
     }
   }, [tab, sub]);
 
@@ -789,14 +830,114 @@ export default function ProjectPage() {
             </div>
           )}
 
-          {/* ─ 일위대가총괄표 / 단가산출총괄표 placeholder ─ */}
-          {(sub === 'unitprice' || sub === 'calculation') && (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center space-y-2">
-                <p className="text-[#9ca3af]" style={{ fontSize: '18px' }}>
-                  {sub === 'unitprice' ? '일위대가총괄표' : '단가산출총괄표'} 준비 중
-                </p>
-                <p className="text-[#d1d5db]" style={{ fontSize: '14px' }}>다음 업데이트에서 제공됩니다</p>
+          {/* ─ 일위대가총괄표 (unitprice) ─ */}
+          {sub === 'unitprice' && (
+            <div className="flex-1 overflow-auto p-4 sm:p-5">
+              <div className="bg-white border border-[#e5e7eb] rounded-xl overflow-hidden">
+                {wtLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="w-6 h-6 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : wtError ? (
+                  <p className="text-center text-[#9ca3af] py-16" style={{ fontSize: '15px' }}>데이터를 불러올 수 없습니다</p>
+                ) : (
+                  <table className="w-full border-collapse min-w-[700px]">
+                    <thead>
+                      <tr className="bg-[#f0f4f9] border-b border-[#e5e7eb]">
+                        {['번호', '품명', '규격', '단위', '노무비', '재료비', '경비', '합계'].map((h) => (
+                          <th key={h} className={`px-3 py-3 text-[#374151] font-medium ${['노무비','재료비','경비','합계'].includes(h) ? 'text-right' : 'text-left'}`}
+                              style={{ fontSize: '16px' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const categories = Array.from(new Set(workTypes.map((w) => w.category)));
+                        let rowNum = 0;
+                        return categories.flatMap((cat) => {
+                          const rows = workTypes.filter((w) => w.category === cat);
+                          return [
+                            <tr key={`gh-${cat}`} className="bg-[#f0f4f9] border-y border-[#e5e7eb]">
+                              <td colSpan={8} className="px-4 py-2.5 font-semibold text-[#374151]" style={{ fontSize: '16px' }}>{cat}</td>
+                            </tr>,
+                            ...rows.map((w) => {
+                              rowNum += 1;
+                              const n = rowNum;
+                              return (
+                                <tr key={w.id} className="border-b border-[#f3f4f6] hover:bg-[#f8fafc]" style={{ height: '48px' }}>
+                                  <td className="px-3 text-[#9ca3af]" style={{ fontSize: '16px' }}>{n}</td>
+                                  <td className="px-3 text-[#111827]" style={{ fontSize: '16px' }}>
+                                    {w.name}{w.is_night && <span className="ml-1">🌙</span>}
+                                  </td>
+                                  <td className="px-3 text-[#6b7280]" style={{ fontSize: '16px' }}>{w.spec}</td>
+                                  <td className="px-3 text-[#6b7280]" style={{ fontSize: '16px' }}>{w.unit}</td>
+                                  <td className="px-3 text-right text-[#374151] tabular-nums" style={{ fontSize: '16px' }}>{fmt(w.labor_price)}</td>
+                                  <td className="px-3 text-right text-[#374151] tabular-nums" style={{ fontSize: '16px' }}>{fmt(w.material_price)}</td>
+                                  <td className="px-3 text-right text-[#374151] tabular-nums" style={{ fontSize: '16px' }}>
+                                    {w.expense_price > 0 ? fmt(w.expense_price) : <span className="text-[#d1d5db]">—</span>}
+                                  </td>
+                                  <td className="px-3 text-right font-semibold text-[#1e3a5f] tabular-nums" style={{ fontSize: '16px' }}>{fmt(w.total_price)}</td>
+                                </tr>
+                              );
+                            }),
+                          ];
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ─ 단가산출총괄표 (calculation) ─ */}
+          {sub === 'calculation' && (
+            <div className="flex-1 overflow-auto p-4 sm:p-5">
+              <div className="bg-white border border-[#e5e7eb] rounded-xl overflow-hidden">
+                {wtLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="w-6 h-6 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : wtError ? (
+                  <p className="text-center text-[#9ca3af] py-16" style={{ fontSize: '15px' }}>데이터를 불러올 수 없습니다</p>
+                ) : (
+                  <table className="w-full border-collapse min-w-[700px]">
+                    <thead>
+                      <tr className="bg-[#f0f4f9] border-b border-[#e5e7eb]">
+                        {['번호', '품명', '규격', '단위', '노무비', '재료비', '경비', '합계'].map((h) => (
+                          <th key={h} className={`px-3 py-3 text-[#374151] font-medium ${['노무비','재료비','경비','합계'].includes(h) ? 'text-right' : 'text-left'}`}
+                              style={{ fontSize: '16px' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const rows = workTypes.filter((w) => !w.is_night && w.category === '토공');
+                        if (rows.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={8} className="text-center py-12 text-[#9ca3af]" style={{ fontSize: '15px' }}>데이터가 없습니다</td>
+                            </tr>
+                          );
+                        }
+                        return rows.map((w, i) => (
+                          <tr key={w.id} className="border-b border-[#f3f4f6] hover:bg-[#f8fafc]" style={{ height: '48px' }}>
+                            <td className="px-3 text-[#9ca3af]" style={{ fontSize: '16px' }}>{i + 1}</td>
+                            <td className="px-3 text-[#111827]" style={{ fontSize: '16px' }}>{w.name}</td>
+                            <td className="px-3 text-[#6b7280]" style={{ fontSize: '16px' }}>{w.spec}</td>
+                            <td className="px-3 text-[#6b7280]" style={{ fontSize: '16px' }}>{w.unit}</td>
+                            <td className="px-3 text-right text-[#374151] tabular-nums" style={{ fontSize: '16px' }}>{fmt(w.labor_price)}</td>
+                            <td className="px-3 text-right text-[#374151] tabular-nums" style={{ fontSize: '16px' }}>{fmt(w.material_price)}</td>
+                            <td className="px-3 text-right text-[#374151] tabular-nums" style={{ fontSize: '16px' }}>
+                              {w.expense_price > 0 ? fmt(w.expense_price) : <span className="text-[#d1d5db]">—</span>}
+                            </td>
+                            <td className="px-3 text-right font-semibold text-[#1e3a5f] tabular-nums" style={{ fontSize: '16px' }}>{fmt(w.total_price)}</td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           )}
@@ -804,40 +945,66 @@ export default function ProjectPage() {
           {/* ─ 기계경비총괄표 (equipment) ─ */}
           {sub === 'equipment' && (
             <div className="flex-1 overflow-auto p-4 sm:p-5">
-              <div className="max-w-4xl mx-auto space-y-4">
+              <div className="max-w-5xl mx-auto space-y-4">
                 {mcLoading ? (
-                  <p className="text-center text-[#9ca3af] py-16" style={{ fontSize: '15px' }}>불러오는 중...</p>
+                  <div className="flex items-center justify-center py-16">
+                    <div className="w-6 h-6 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : mcError ? (
+                  <p className="text-center text-[#9ca3af] py-16" style={{ fontSize: '15px' }}>데이터를 불러올 수 없습니다</p>
                 ) : (
                   <>
                     <div className="bg-white border border-[#e5e7eb] rounded-xl overflow-hidden">
-                      <table className="w-full border-collapse" style={{ fontSize: '13px' }}>
+                      <table className="w-full border-collapse min-w-[700px]">
                         <thead>
                           <tr className="bg-[#f0f4f9] border-b border-[#e5e7eb]">
-                            {['장비명', '규격', '노무비', '재료비', '경비', '합계 (hr)'].map((h) => (
-                              <th key={h} className="px-3 py-2.5 text-left text-[#374151] font-medium">{h}</th>
+                            {['번호', '장비명', '규격', '단위', '노무비', '재료비', '경비', '합계(hr당)'].map((h) => (
+                              <th key={h} className={`px-3 py-3 text-[#374151] font-medium ${['노무비','재료비','경비','합계(hr당)'].includes(h) ? 'text-right' : 'text-left'}`}
+                                  style={{ fontSize: '16px' }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#f3f4f6]">
+                        <tbody>
                           {machineCosts.length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="text-center py-12 text-[#9ca3af]">데이터가 없습니다</td>
+                              <td colSpan={8} className="text-center py-12 text-[#9ca3af]">데이터가 없습니다</td>
                             </tr>
                           ) : (
                             machineCosts.map((m, i) => (
-                              <tr key={m.id} className={i % 2 === 0 ? '' : 'bg-[#fafafa]'}>
-                                <td className="px-3 py-2.5 text-[#111827] font-medium">{m.name}</td>
-                                <td className="px-3 py-2.5 text-[#6b7280]">{m.spec}</td>
-                                <td className="px-3 py-2.5 text-right text-[#374151] tabular-nums">
-                                  {m.labor_cost > 0 ? fmt(m.labor_cost) : <span className="text-[#d1d5db]">—</span>}
+                              <tr key={m.id} className="border-b border-[#f3f4f6] hover:bg-[#f8fafc]" style={{ height: '48px' }}>
+                                <td className="px-3 text-[#9ca3af]" style={{ fontSize: '16px' }}>{i + 1}</td>
+                                <td className="px-3 text-[#111827] font-medium" style={{ fontSize: '16px' }}>{m.name}</td>
+                                <td className="px-3 text-[#6b7280]" style={{ fontSize: '16px' }}>{m.spec}</td>
+                                <td className="px-3 text-[#6b7280]" style={{ fontSize: '16px' }}>{m.unit}</td>
+                                <td className="px-3 text-right text-[#374151] tabular-nums" style={{ fontSize: '16px' }}>
+                                  {m.labor_price > 0 ? fmt(m.labor_price) : <span className="text-[#d1d5db]">—</span>}
                                 </td>
-                                <td className="px-3 py-2.5 text-right text-[#374151] tabular-nums">{fmt(m.material_cost)}</td>
-                                <td className="px-3 py-2.5 text-right text-[#374151] tabular-nums">{fmt(m.expense_cost)}</td>
-                                <td className="px-3 py-2.5 text-right font-semibold text-[#1e3a5f] tabular-nums">{fmt(m.total_cost)}</td>
+                                <td className="px-3 text-right text-[#374151] tabular-nums" style={{ fontSize: '16px' }}>{fmt(m.material_price)}</td>
+                                <td className="px-3 text-right text-[#374151] tabular-nums" style={{ fontSize: '16px' }}>{fmt(m.expense_price)}</td>
+                                <td className="px-3 text-right font-semibold text-[#1e3a5f] tabular-nums" style={{ fontSize: '16px' }}>{fmt(m.total_price)}</td>
                               </tr>
                             ))
                           )}
                         </tbody>
+                        {machineCosts.length > 0 && (
+                          <tfoot>
+                            <tr className="bg-[#f0f4f9] border-t-2 border-[#1e3a5f]" style={{ height: '48px' }}>
+                              <td className="px-3 font-semibold text-[#374151]" colSpan={4} style={{ fontSize: '16px' }}>합계</td>
+                              <td className="px-3 text-right font-semibold text-[#374151] tabular-nums" style={{ fontSize: '16px' }}>
+                                {fmt(machineCosts.reduce((s, m) => s + m.labor_price, 0))}
+                              </td>
+                              <td className="px-3 text-right font-semibold text-[#374151] tabular-nums" style={{ fontSize: '16px' }}>
+                                {fmt(machineCosts.reduce((s, m) => s + m.material_price, 0))}
+                              </td>
+                              <td className="px-3 text-right font-semibold text-[#374151] tabular-nums" style={{ fontSize: '16px' }}>
+                                {fmt(machineCosts.reduce((s, m) => s + m.expense_price, 0))}
+                              </td>
+                              <td className="px-3 text-right font-bold text-[#1e3a5f] tabular-nums" style={{ fontSize: '16px' }}>
+                                {fmt(machineCosts.reduce((s, m) => s + m.total_price, 0))}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        )}
                       </table>
                     </div>
                     <p className="text-[#9ca3af] px-1" style={{ fontSize: '12px' }}>
