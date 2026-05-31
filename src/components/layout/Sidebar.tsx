@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { useParams, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Project } from '@/types';
@@ -76,7 +75,7 @@ export default function Sidebar() {
       {/* 로고 */}
       <div className="h-16 flex items-center px-5 border-b border-[#e5e7eb]">
         <Link href="/">
-          <Image src="/new_logo.png" alt="All-In Build" width={140} height={40} priority />
+          <img src="/new_logo.png" alt="All-In Build" style={{ height: '40px', width: 'auto' }} />
         </Link>
       </div>
 

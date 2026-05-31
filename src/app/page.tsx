@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import Badge from '@/components/ui/Badge';
 import AddProjectModal, { ProjectFormData } from '@/components/features/AddProjectModal';
 import { Project, ProjectStatus } from '@/types';
@@ -115,7 +114,7 @@ export default function HomePage() {
     <div onClick={() => setOpenMenuId(null)}>
       {/* 헤더 */}
       <header className="bg-white border-b border-[#e5e7eb] px-5 flex items-center justify-between" style={{ height: '64px' }}>
-        <Image src="/new_logo.png" alt="All-In Build" width={140} height={40} priority />
+        <img src="/new_logo.png" alt="All-In Build" style={{ height: '40px', width: 'auto' }} />
         <button
           onClick={openAdd}
           className="flex items-center gap-2 bg-[#1e3a5f] text-white px-5 rounded-xl font-medium hover:bg-[#2d5080] transition-colors"
