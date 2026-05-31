@@ -113,8 +113,8 @@ export default function HomePage() {
   return (
     <div onClick={() => setOpenMenuId(null)}>
       {/* 헤더 */}
-      <header className="bg-white border-b border-[#e5e7eb] px-5 flex items-center justify-between" style={{ height: '64px' }}>
-        <img src="/new_logo.png" alt="All-In Build" style={{ height: '40px', width: 'auto' }} />
+      <header className="bg-white border-b border-[#e5e7eb] px-5 flex items-center justify-between" style={{ height: '80px' }}>
+        <img src="/new_logo.png" alt="All-In Build" style={{ height: '52px', width: 'auto' }} />
         <button
           onClick={openAdd}
           className="flex items-center gap-2 bg-[#1e3a5f] text-white px-5 rounded-xl font-medium hover:bg-[#2d5080] transition-colors"

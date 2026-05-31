@@ -412,7 +412,7 @@ export default function ProjectPage() {
   return (
     <div className="flex flex-col h-screen" onClick={() => setOpenWorkMenuId(null)}>
       {/* 헤더 */}
-      <header className="bg-white border-b border-[#e5e7eb] flex items-center px-4 gap-3 flex-shrink-0" style={{ height: '64px' }}>
+      <header className="bg-white border-b border-[#e5e7eb] flex items-center px-4 gap-3 flex-shrink-0" style={{ height: '80px' }}>
         <button
           onClick={() => router.push('/')}
           className="flex items-center justify-center rounded-lg hover:bg-[#f3f4f6] transition-colors flex-shrink-0"

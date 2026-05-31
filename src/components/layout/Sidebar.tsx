@@ -73,9 +73,9 @@ export default function Sidebar() {
   return (
     <aside className="w-60 flex flex-col bg-white border-r border-[#e5e7eb] min-h-screen">
       {/* 로고 */}
-      <div className="h-16 flex items-center px-5 border-b border-[#e5e7eb]">
+      <div className="h-20 flex items-center px-5 border-b border-[#e5e7eb]">
         <Link href="/">
-          <img src="/new_logo.png" alt="All-In Build" style={{ height: '40px', width: 'auto' }} />
+          <img src="/new_logo.png" alt="All-In Build" style={{ height: '52px', width: 'auto' }} />
         </Link>
       </div>
 
