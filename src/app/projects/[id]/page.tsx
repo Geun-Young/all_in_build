@@ -10,9 +10,9 @@ import AddWorkModal, { WorkFormData } from '@/components/features/AddWorkModal';
 import {
   ChevronLeft, Plus, MoreHorizontal,
   Download, CheckCircle, X, Search, Sun, Moon,
-  Trash2, ChevronDown, Send, RotateCcw, FileDown, Link2,
+  Trash2, ChevronDown,
 } from 'lucide-react';
-import DrawingCanvas, { DrawingData } from '@/components/features/DrawingCanvas';
+import BlueprintEditor from '@/components/features/BlueprintEditor';
 
 interface WorkTypeItem {
   id: string;
@@ -225,11 +225,6 @@ function CostRow({ label, rate, sym, value, bold, accent, sub }: CostRowProps) {
   );
 }
 
-const INITIAL_BP_MSG = {
-  role: 'assistant' as const,
-  content: '안녕하세요! 상하수도 관로 도면 설계를 도와드리겠습니다.\n어떤 공사를 진행하실 예정인가요?\n예) 신성동 D400 상수도 이설공사, 기존 D350 → 신설 D400',
-};
-
 // ── 메인 페이지 ──────────────────────────────────────
 export default function ProjectPage() {
   const params = useParams();
@@ -278,31 +273,6 @@ export default function ProjectPage() {
 
   const nameInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (isEditingName) nameInputRef.current?.focus(); }, [isEditingName]);
-
-  // ── 도면설계 상태 ─
-  const [bpMessages, setBpMessages] = useState<Array<{role: 'user'|'assistant', content: string}>>([]);
-  const [bpInput, setBpInput] = useState('');
-  const [bpLoading, setBpLoading] = useState(false);
-  const [bpDrawingData, setBpDrawingData] = useState<DrawingData | null>(null);
-  const [bpDrawingTab, setBpDrawingTab] = useState<'diagram'|'materials'>('diagram');
-  const [bpMobileView, setBpMobileView] = useState<'chat'|'preview'>('chat');
-  const [bpEstimateSuccess, setBpEstimateSuccess] = useState(false);
-  const bpEndRef = useRef<HTMLDivElement>(null);
-
-  // Blueprint: sessionStorage 복원 + 초기 메시지
-  useEffect(() => {
-    if (tab !== 'blueprint') return;
-    const stored = sessionStorage.getItem(`blueprint_messages_${id}`);
-    if (stored) {
-      try { setBpMessages(JSON.parse(stored)); return; } catch {}
-    }
-    setBpMessages([INITIAL_BP_MSG]);
-  }, [tab, id]);
-
-  // Blueprint: 스크롤 자동
-  useEffect(() => {
-    bpEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [bpMessages]);
 
   const doSearch = useCallback(async () => {
     setIsSearching(true);
@@ -439,87 +409,6 @@ export default function ProjectPage() {
   const costSheet = tab === 'estimate' && sub === 'costsheet' && items.length > 0
     ? calcFinalAmount(totalMaterial, totalLabor, totalExpense)
     : null;
-
-  // ── 도면설계 핸들러 ─
-  function handleBpReset() {
-    setBpMessages([INITIAL_BP_MSG]);
-    setBpDrawingData(null);
-    setBpEstimateSuccess(false);
-    sessionStorage.removeItem(`blueprint_messages_${id}`);
-  }
-
-  async function handleBpSend() {
-    const text = bpInput.trim();
-    if (!text || bpLoading) return;
-    const userMsg = { role: 'user' as const, content: text };
-    const newMsgs = [...bpMessages, userMsg];
-    setBpMessages(newMsgs);
-    setBpInput('');
-    setBpLoading(true);
-    try {
-      const res = await fetch('/api/blueprint/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMsgs }),
-      });
-      const data = await res.json();
-      const aiMsg = { role: 'assistant' as const, content: data.message || '응답을 받지 못했습니다.' };
-      const finalMsgs = [...newMsgs, aiMsg];
-      setBpMessages(finalMsgs);
-      sessionStorage.setItem(`blueprint_messages_${id}`, JSON.stringify(finalMsgs));
-      if (data.drawingData) {
-        setBpDrawingData(data.drawingData);
-        setBpMobileView('preview');
-      }
-    } catch {
-      setBpMessages((prev) => [...prev, { role: 'assistant' as const, content: 'AI 연결에 오류가 발생했습니다. 다시 시도해 주세요.' }]);
-    } finally {
-      setBpLoading(false);
-    }
-  }
-
-  async function handleBpDxf() {
-    if (!bpDrawingData) return;
-    try {
-      const res = await fetch('/api/blueprint/export-dxf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ drawingData: bpDrawingData }),
-      });
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${bpDrawingData.projectName}_계통도.dxf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      alert('DXF 생성에 실패했습니다.');
-    }
-  }
-
-  function handleBpEstimate() {
-    if (!bpDrawingData) return;
-    const newBpItems: EstimateItem[] = bpDrawingData.totalMaterials.map((m, i) => ({
-      id: `bp-${Date.now()}-${i}`,
-      estimate_id: id,
-      category: '배관공',
-      work_name: `${m.name} ${m.spec}`.trim(),
-      spec: m.spec,
-      unit: m.unit,
-      quantity: m.qty,
-      unit_price: 0,
-      labor_amount: 0,
-      material_amount: 0,
-      expense_amount: 0,
-      total_amount: 0,
-      is_night: false,
-      sort_order: items.length + i,
-    }));
-    setItems((prev) => [...prev, ...newBpItems]);
-    setBpEstimateSuccess(true);
-    setBpDrawingTab('materials');
-  }
 
   return (
     <div className="flex flex-col h-screen" onClick={() => setOpenWorkMenuId(null)}>
@@ -1194,219 +1083,10 @@ export default function ProjectPage() {
 
       {/* ─── blueprint: 도면설계 ──────────────────────── */}
       {tab === 'blueprint' && (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* 모바일 탭 전환 */}
-          <div className="md:hidden flex border-b border-[#e5e7eb] bg-white flex-shrink-0">
-            {(['chat', 'preview'] as const).map((v) => (
-              <button key={v} onClick={() => setBpMobileView(v)}
-                className={`flex-1 transition-colors border-b-2 -mb-px ${bpMobileView === v ? 'border-[#1e3a5f] text-[#1e3a5f] font-medium' : 'border-transparent text-[#6b7280]'}`}
-                style={{ fontSize: '15px', minHeight: '44px' }}
-              >
-                {v === 'chat' ? 'AI 대화' : '도면 미리보기'}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex-1 flex overflow-hidden">
-            {/* 좌측: AI 대화 패널 (45%) */}
-            <div
-              className={`${bpMobileView === 'preview' ? 'hidden' : 'flex'} md:flex flex-col border-r border-[#e5e7eb] overflow-hidden w-full md:w-[45%] flex-shrink-0`}
-            >
-              {/* 채팅 헤더 */}
-              <div className="bg-white border-b border-[#e5e7eb] px-4 py-3 flex items-start justify-between flex-shrink-0">
-                <div>
-                  <h2 className="font-semibold text-[#111827]" style={{ fontSize: '16px' }}>AI 도면 설계</h2>
-                  <p className="text-[#9ca3af] mt-0.5" style={{ fontSize: '13px' }}>AI와 대화로 계통도를 자동 생성합니다</p>
-                </div>
-                <button
-                  onClick={handleBpReset}
-                  className="flex items-center gap-1.5 border border-[#e5e7eb] rounded-lg text-[#6b7280] hover:bg-[#f3f4f6] px-3 flex-shrink-0"
-                  style={{ height: '36px', fontSize: '13px' }}
-                >
-                  <RotateCcw size={12} /> 대화 초기화
-                </button>
-              </div>
-
-              {/* 메시지 영역 */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#f8fafc]">
-                {bpMessages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div
-                      className={`max-w-[85%] px-4 py-3 rounded-xl ${
-                        msg.role === 'user'
-                          ? 'bg-[#1e3a5f] text-white'
-                          : 'bg-white border border-[#e5e7eb] text-[#111827]'
-                      }`}
-                      style={{ fontSize: '14px', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}
-                    >
-                      {msg.content}
-                    </div>
-                  </div>
-                ))}
-                {bpLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-white border border-[#e5e7eb] rounded-xl px-4 py-3 flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
-                      <span className="text-[#6b7280]" style={{ fontSize: '14px' }}>설계 분석 중...</span>
-                    </div>
-                  </div>
-                )}
-                <div ref={bpEndRef} />
-              </div>
-
-              {/* 입력창 */}
-              <div className="border-t border-[#e5e7eb] p-3 bg-white flex-shrink-0">
-                <div className="flex gap-2">
-                  <textarea
-                    value={bpInput}
-                    onChange={(e) => setBpInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleBpSend(); }
-                    }}
-                    placeholder="공사 내용을 입력하세요... (Enter 전송, Shift+Enter 줄바꿈)"
-                    disabled={bpLoading}
-                    rows={2}
-                    className="flex-1 border border-[#e5e7eb] rounded-lg px-3 py-2 text-[#111827] focus:outline-none focus:border-[#1e3a5f] resize-none disabled:opacity-50"
-                    style={{ fontSize: '14px' }}
-                  />
-                  <button
-                    onClick={handleBpSend}
-                    disabled={bpLoading || !bpInput.trim()}
-                    className="bg-[#1e3a5f] text-white rounded-lg hover:bg-[#2d5080] disabled:opacity-40 transition-colors flex items-center justify-center flex-shrink-0"
-                    style={{ width: '48px', height: '72px' }}
-                  >
-                    <Send size={18} />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* 우측: 도면 미리보기 패널 (55%) */}
-            <div
-              className={`${bpMobileView === 'chat' ? 'hidden' : 'flex'} md:flex flex-col flex-1 overflow-hidden`}
-            >
-              {/* 미리보기 헤더 */}
-              <div className="bg-white border-b border-[#e5e7eb] px-4 flex items-center justify-between flex-shrink-0" style={{ minHeight: '56px' }}>
-                <span className="font-medium text-[#111827]" style={{ fontSize: '16px' }}>도면 미리보기</span>
-                {bpDrawingData && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleBpDxf}
-                      className="flex items-center gap-1.5 border border-[#e5e7eb] rounded-lg text-[#374151] hover:bg-[#f3f4f6] px-2.5"
-                      style={{ height: '36px', fontSize: '12px' }}
-                    >
-                      <FileDown size={13} /> DXF
-                    </button>
-                    <button
-                      onClick={() => window.print()}
-                      className="flex items-center gap-1.5 border border-[#e5e7eb] rounded-lg text-[#374151] hover:bg-[#f3f4f6] px-2.5"
-                      style={{ height: '36px', fontSize: '12px' }}
-                    >
-                      <Download size={13} /> PDF
-                    </button>
-                    <button
-                      onClick={handleBpEstimate}
-                      className="flex items-center gap-1.5 bg-[#1e3a5f] text-white rounded-lg hover:bg-[#2d5080] px-2.5"
-                      style={{ height: '36px', fontSize: '12px' }}
-                    >
-                      <Link2 size={13} /> 견적 연동
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* 계통도 / 자재집계표 탭 */}
-              {bpDrawingData && (
-                <div className="flex border-b border-[#e5e7eb] bg-white flex-shrink-0">
-                  {(['diagram', 'materials'] as const).map((t) => (
-                    <button key={t} onClick={() => setBpDrawingTab(t)}
-                      className={`px-5 border-b-2 -mb-px transition-colors ${bpDrawingTab === t ? 'border-[#1e3a5f] text-[#1e3a5f] font-medium' : 'border-transparent text-[#6b7280]'}`}
-                      style={{ fontSize: '14px', minHeight: '44px' }}
-                    >
-                      {t === 'diagram' ? '계통도' : '자재집계표'}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* 콘텐츠 */}
-              <div className="flex-1 overflow-auto p-4">
-                {!bpDrawingData ? (
-                  <div className="h-full flex items-center justify-center">
-                    <div className="text-center space-y-3">
-                      <p className="text-[#9ca3af]" style={{ fontSize: '16px' }}>AI와 대화를 시작하면</p>
-                      <p className="text-[#d1d5db]" style={{ fontSize: '14px' }}>계통도가 여기에 자동으로 표시됩니다</p>
-                    </div>
-                  </div>
-                ) : bpDrawingTab === 'diagram' ? (
-                  <DrawingCanvas data={bpDrawingData} />
-                ) : (
-                  <div>
-                    {bpEstimateSuccess && (
-                      <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-3 flex items-center justify-between">
-                        <span className="text-green-800" style={{ fontSize: '14px' }}>견적 내역서에 자재가 추가되었습니다.</span>
-                        <button
-                          onClick={() => router.push(`/projects/${id}?tab=estimate&sub=ledger`)}
-                          className="text-[#1e3a5f] underline"
-                          style={{ fontSize: '14px' }}
-                        >
-                          내역서로 이동
-                        </button>
-                      </div>
-                    )}
-                    <div className="bg-white border border-[#e5e7eb] rounded-xl overflow-hidden">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr className="bg-[#f0f4f9] border-b border-[#e5e7eb]">
-                            {['번호', '품명', '규격', '단위', '수량', '비고'].map((h) => (
-                              <th key={h} className="px-4 py-3 text-left text-[#374151] font-medium" style={{ fontSize: '15px' }}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {bpDrawingData.totalMaterials.length === 0 ? (
-                            <tr>
-                              <td colSpan={6} className="text-center py-10 text-[#9ca3af]">자재 정보가 없습니다</td>
-                            </tr>
-                          ) : (
-                            bpDrawingData.totalMaterials.map((m, i) => (
-                              <tr key={i} className="border-b border-[#f3f4f6] hover:bg-[#f8fafc]" style={{ height: '48px' }}>
-                                <td className="px-4 text-[#9ca3af]" style={{ fontSize: '15px' }}>{i + 1}</td>
-                                <td className="px-4 text-[#111827] font-medium" style={{ fontSize: '15px' }}>{m.name}</td>
-                                <td className="px-4 text-[#6b7280]" style={{ fontSize: '15px' }}>{m.spec}</td>
-                                <td className="px-4 text-[#6b7280]" style={{ fontSize: '15px' }}>{m.unit}</td>
-                                <td className="px-4 text-[#374151] font-semibold" style={{ fontSize: '15px' }}>{m.qty}</td>
-                                <td className="px-4 text-[#9ca3af]" style={{ fontSize: '15px' }}>—</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-[#f0f4f9] border-t-2 border-[#1e3a5f]" style={{ height: '48px' }}>
-                            <td className="px-4 font-semibold text-[#111827]" colSpan={4} style={{ fontSize: '15px' }}>합계</td>
-                            <td className="px-4 font-bold text-[#1e3a5f]" style={{ fontSize: '15px' }}>
-                              {bpDrawingData.totalMaterials.reduce((s, m) => s + m.qty, 0)}
-                            </td>
-                            <td />
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                    <div className="mt-4 flex justify-end">
-                      <button
-                        onClick={handleBpEstimate}
-                        className="flex items-center gap-2 bg-[#1e3a5f] text-white rounded-xl hover:bg-[#2d5080]"
-                        style={{ height: '48px', fontSize: '15px', padding: '0 20px' }}
-                      >
-                        <Link2 size={16} /> 견적 연동 — 내역서에 자동 추가
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <BlueprintEditor
+          projectId={id}
+          onAddItems={(newItems) => setItems((prev) => [...prev, ...newItems])}
+        />
       )}
 
       {/* 작업 추가 모달 */}
