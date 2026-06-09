@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { geminiModel } from '@/lib/gemini';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ChatMessage = { role: string; content: string };
 
 export async function POST(req: NextRequest) {
@@ -24,27 +23,16 @@ export async function POST(req: NextRequest) {
     const result = await chat.sendMessage(lastMessage.content);
     const text = result.response.text();
 
-    // JSON 감지 — 우선순위 순으로 시도
+    // <<<DRAWING_DATA>>> ... <<<END>>> 구분자로 JSON 파싱
     let drawingData = null;
-
-    // 1. 커스텀 구분자 <<<DRAWING_DATA>>> ... <<<END>>>
     const delimMatch = text.match(/<<<DRAWING_DATA>>>\s*([\s\S]*?)\s*<<<END>>>/);
-    // 2. ```json 코드블록
-    const jsonMatch1 = text.match(/```json\n?([\s\S]*?)\n?```/);
-    // 3. ``` 코드블록
-    const jsonMatch2 = text.match(/```\n?([\s\S]*?)\n?```/);
-    // 4. "pipes" 키를 포함한 raw JSON 객체
-    const jsonMatch3 = text.match(/\{[\s\S]*"pipes"[\s\S]*\}/);
 
-    const rawJson = delimMatch?.[1] || jsonMatch1?.[1] || jsonMatch2?.[1] || jsonMatch3?.[0];
-
-    if (rawJson) {
+    if (delimMatch?.[1]) {
       try {
-        drawingData = JSON.parse(rawJson);
-        drawingData.pipes = drawingData.pipes ?? [];
-        drawingData.manholes = drawingData.manholes ?? [];
-        drawingData.valves = drawingData.valves ?? [];
+        drawingData = JSON.parse(delimMatch[1]);
+        drawingData.sections = drawingData.sections ?? [];
         drawingData.warnings = drawingData.warnings ?? [];
+        drawingData.totalMaterials = drawingData.totalMaterials ?? [];
       } catch (e) {
         console.error('JSON 파싱 실패:', e);
       }
@@ -52,16 +40,11 @@ export async function POST(req: NextRequest) {
 
     const cleanMessage = text
       .replace(/<<<DRAWING_DATA>>>[\s\S]*?<<<END>>>/g, '')
-      .replace(/```json\n?[\s\S]*?\n?```/g, '')
-      .replace(/```\n?[\s\S]*?\n?```/g, '')
       .trim();
 
-    return NextResponse.json({
-      message: cleanMessage,
-      drawingData,
-    });
+    return NextResponse.json({ message: cleanMessage, drawingData });
   } catch (error) {
-    console.error('Gemini 오류 상세:', error);
+    console.error('Gemini 오류:', error);
     return NextResponse.json({ error: 'AI 응답 오류', detail: String(error) }, { status: 500 });
   }
 }
