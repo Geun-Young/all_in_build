@@ -1,25 +1,9 @@
 'use client';
 
-export interface DrawingComponent {
-  type: 'kp' | 'isolation' | 'valve' | 'airvalve';
-  spec: string;
-  qty: number;
-}
+import { SYMBOL_ORDER, SYMBOL_META } from '@/types/drawing';
+import type { SymbolType, DrawingSection, DrawingData } from '@/types/drawing';
 
-export interface DrawingSection {
-  id: string;
-  existingPipe: string;
-  newPipe: string;
-  length: number;
-  components: DrawingComponent[];
-}
-
-export interface DrawingData {
-  projectName: string;
-  sections: DrawingSection[];
-  warnings: string[];
-  totalMaterials: { name: string; spec: string; unit: string; qty: number }[];
-}
+export type { DrawingComponent, DrawingSection, DrawingData } from '@/types/drawing';
 
 // ── 레이아웃 상수 ──────────────────────────────────────
 const SVG_W = 800;
@@ -38,30 +22,62 @@ const Y_DIV    = 196; // 구간 구분선
 
 const CIRCLED = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫','⑬','⑭','⑮'];
 
-type SymbolType = 'kp' | 'isolation' | 'valve' | 'airvalve';
+const NAVY = '#1e3a5f';
 
-// ── 기호 SVG ─────────────────────────────────────────
+// ── 기호 SVG (8종) ───────────────────────────────────
 function Sym({ type, cx, cy }: { type: SymbolType; cx: number; cy: number }) {
-  if (type === 'kp') return (
-    <circle cx={cx} cy={cy} r={10} fill="white" stroke="#1e3a5f" strokeWidth={2} />
-  );
-  if (type === 'isolation') return (
-    <>
-      <circle cx={cx} cy={cy} r={12} fill="white" stroke="#1e3a5f" strokeWidth={2} />
-      <circle cx={cx} cy={cy} r={6}  fill="white" stroke="#1e3a5f" strokeWidth={1.5} />
-    </>
-  );
-  if (type === 'valve') return (
-    <>
-      <circle cx={cx} cy={cy} r={10} fill="white" stroke="#1e3a5f" strokeWidth={2} />
-      <line x1={cx - 7} y1={cy - 7} x2={cx + 7} y2={cy + 7} stroke="#1e3a5f" strokeWidth={2} />
-      <line x1={cx + 7} y1={cy - 7} x2={cx - 7} y2={cy + 7} stroke="#1e3a5f" strokeWidth={2} />
-    </>
-  );
-  if (type === 'airvalve') return (
-    <polygon points={`${cx},${cy - 10} ${cx - 8},${cy + 8} ${cx + 8},${cy + 8}`} fill="#1e3a5f" />
-  );
-  return null;
+  switch (type) {
+    case 'kp':
+      return <circle cx={cx} cy={cy} r={10} fill="white" stroke={NAVY} strokeWidth={2} />;
+    case 'isolation':
+      return (
+        <>
+          <circle cx={cx} cy={cy} r={12} fill="white" stroke={NAVY} strokeWidth={2} />
+          <circle cx={cx} cy={cy} r={6}  fill="white" stroke={NAVY} strokeWidth={1.5} />
+        </>
+      );
+    case 'valve':
+      return (
+        <>
+          <circle cx={cx} cy={cy} r={10} fill="white" stroke={NAVY} strokeWidth={2} />
+          <line x1={cx - 7} y1={cy - 7} x2={cx + 7} y2={cy + 7} stroke={NAVY} strokeWidth={2} />
+          <line x1={cx + 7} y1={cy - 7} x2={cx - 7} y2={cy + 7} stroke={NAVY} strokeWidth={2} />
+        </>
+      );
+    case 'airvalve':
+      return <polygon points={`${cx},${cy - 10} ${cx - 8},${cy + 8} ${cx + 8},${cy + 8}`} fill={NAVY} />;
+    case 'drainvalve':
+      // 이토변 — 아래로 향한 삼각형(배수)
+      return <polygon points={`${cx - 8},${cy - 8} ${cx + 8},${cy - 8} ${cx},${cy + 10}`} fill="white" stroke={NAVY} strokeWidth={2} />;
+    case 'hydrant':
+      // 소화전 — 원 안에 H
+      return (
+        <>
+          <circle cx={cx} cy={cy} r={10} fill="white" stroke={NAVY} strokeWidth={2} />
+          <line x1={cx - 4} y1={cy - 5} x2={cx - 4} y2={cy + 5} stroke={NAVY} strokeWidth={2} />
+          <line x1={cx + 4} y1={cy - 5} x2={cx + 4} y2={cy + 5} stroke={NAVY} strokeWidth={2} />
+          <line x1={cx - 4} y1={cy} x2={cx + 4} y2={cy} stroke={NAVY} strokeWidth={2} />
+        </>
+      );
+    case 'bend':
+      // 이형관(곡관) — 엘보 꺾인 선
+      return (
+        <polyline
+          points={`${cx - 9},${cy + 7} ${cx - 9},${cy - 4} ${cx + 2},${cy - 4} ${cx + 9},${cy + 3}`}
+          fill="none" stroke={NAVY} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round"
+        />
+      );
+    case 'manhole':
+      // 맨홀 — 사각형 안의 원
+      return (
+        <>
+          <rect x={cx - 10} y={cy - 10} width={20} height={20} fill="white" stroke={NAVY} strokeWidth={2} rx={2} />
+          <circle cx={cx} cy={cy} r={6} fill="white" stroke={NAVY} strokeWidth={1.5} />
+        </>
+      );
+    default:
+      return null;
+  }
 }
 
 // ── 구간 1개 렌더링 ───────────────────────────────────
@@ -74,7 +90,7 @@ function SectionRow({ section, yOffset }: { section: DrawingSection; yOffset: nu
   // 기호 평탄화
   const flat: SymbolType[] = [];
   section.components.forEach((c) => {
-    for (let i = 0; i < c.qty; i++) flat.push(c.type as SymbolType);
+    for (let i = 0; i < c.qty; i++) flat.push(c.type);
   });
   const total = flat.length;
   const step = total > 0 ? pipeW / (total + 1) : pipeW / 2;
@@ -149,36 +165,37 @@ function SectionRow({ section, yOffset }: { section: DrawingSection; yOffset: nu
   );
 }
 
-// ── 범례 ─────────────────────────────────────────────
-function Legend({ totalH }: { totalH: number }) {
-  const lx = SVG_W - 175;
-  const ly = totalH - 148;
+// ── 범례 (도면에 실제 등장하는 기호만, 데이터 기반) ──────────
+function Legend({ totalH, used }: { totalH: number; used: SymbolType[] }) {
+  const rowH = 25;
+  const boxH = 32 + used.length * rowH;
+  const lx = SVG_W - 185;
+  const ly = totalH - boxH - 10;
   return (
     <g transform={`translate(${lx},${ly})`}>
-      <rect width={162} height={138} fill="white" stroke="#e5e7eb" strokeWidth={1} rx={4} />
-      <text x={81} y={20} textAnchor="middle" fontSize={13} fill="#374151" fontWeight="600">범 례</text>
-
-      <circle cx={20} cy={40} r={8} fill="white" stroke="#1e3a5f" strokeWidth={2} />
-      <text x={34} y={44} fontSize={11} fill="#374151">KP매커니컬접합</text>
-
-      <circle cx={20} cy={65} r={10} fill="white" stroke="#1e3a5f" strokeWidth={2} />
-      <circle cx={20} cy={65} r={5}  fill="white" stroke="#1e3a5f" strokeWidth={1.5} />
-      <text x={34} y={69} fontSize={11} fill="#374151">이탈방지접합</text>
-
-      <circle cx={20} cy={90} r={8} fill="white" stroke="#1e3a5f" strokeWidth={2} />
-      <line x1={13} y1={83} x2={27} y2={97} stroke="#1e3a5f" strokeWidth={2} />
-      <line x1={27} y1={83} x2={13} y2={97} stroke="#1e3a5f" strokeWidth={2} />
-      <text x={34} y={94} fontSize={11} fill="#374151">제수밸브</text>
-
-      <polygon points="20,107 12,119 28,119" fill="#1e3a5f" />
-      <text x={34} y={118} fontSize={11} fill="#374151">공기밸브</text>
+      <rect width={172} height={boxH} fill="white" stroke="#e5e7eb" strokeWidth={1} rx={4} />
+      <text x={86} y={20} textAnchor="middle" fontSize={13} fill="#374151" fontWeight="600">범 례</text>
+      {used.map((type, i) => {
+        const cy = 40 + i * rowH;
+        return (
+          <g key={type}>
+            <Sym type={type} cx={22} cy={cy} />
+            <text x={42} y={cy + 4} fontSize={11} fill="#374151">{SYMBOL_META[type].ko}</text>
+          </g>
+        );
+      })}
     </g>
   );
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────
 export default function DrawingCanvas({ data }: { data: DrawingData }) {
-  const totalH = data.sections.length * SECTION_H + P_TOP * 2 + 160;
+  // 도면에 실제 사용된 기호만 범례에 표시 (정규 순서)
+  const usedSet = new Set<SymbolType>();
+  data.sections.forEach((s) => s.components.forEach((c) => { if (c.qty > 0) usedSet.add(c.type); }));
+  const used = SYMBOL_ORDER.filter((t) => usedSet.has(t));
+  const legendH = used.length > 0 ? 42 + used.length * 25 : 0;
+  const totalH = data.sections.length * SECTION_H + P_TOP * 2 + legendH + 40;
 
   return (
     <div className="w-full overflow-auto">
@@ -205,8 +222,8 @@ export default function DrawingCanvas({ data }: { data: DrawingData }) {
           <SectionRow key={sec.id} section={sec} yOffset={i * SECTION_H} />
         ))}
 
-        {/* 범례 */}
-        <Legend totalH={totalH} />
+        {/* 범례 (사용된 기호가 있을 때만) */}
+        {used.length > 0 && <Legend totalH={totalH} used={used} />}
       </svg>
     </div>
   );

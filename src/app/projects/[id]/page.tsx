@@ -12,7 +12,7 @@ import {
   Download, CheckCircle, X, Search, Sun, Moon,
   Trash2, ChevronDown,
 } from 'lucide-react';
-import BlueprintEditor from '@/components/features/BlueprintEditor';
+import BlueprintWorkspace from '@/components/features/BlueprintWorkspace';
 
 interface WorkTypeItem {
   id: string;
@@ -1083,7 +1083,7 @@ export default function ProjectPage() {
 
       {/* ─── blueprint: 도면설계 ──────────────────────── */}
       {tab === 'blueprint' && (
-        <BlueprintEditor
+        <BlueprintWorkspace
           projectId={id}
           onAddItems={(newItems) => setItems((prev) => [...prev, ...newItems])}
         />

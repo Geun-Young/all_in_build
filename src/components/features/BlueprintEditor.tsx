@@ -6,9 +6,13 @@ import {
   Trash2, Check, Zap, FileDown, Link2, Download,
 } from 'lucide-react';
 import type { EstimateItem } from '@/types';
+import {
+  SYMBOL_ORDER, SYMBOL_META, aggregateMaterials, materialsToEstimateItems,
+} from '@/types/drawing';
+import type { SymbolType, DrawingSection } from '@/types/drawing';
 
 // ── 타입 ─────────────────────────────────────────────
-type SymType = 'kp' | 'isolation' | 'valve' | 'airvalve';
+type SymType = SymbolType;
 type ActiveTool = 'select' | SymType;
 
 interface BpPin { id: string; label: string; x: number; y: number; }
@@ -20,32 +24,65 @@ interface BpSection {
 }
 
 const PIPE_SIZES = ['D100','D150','D200','D250','D300','D350','D400','D450','D500'];
-const SYM_NAMES: Record<SymType, string> = {
-  kp: 'KP매커니컬접합', isolation: '이탈방지접합', valve: '제수밸브', airvalve: '공기밸브',
-};
-const SYM_BTN: Record<SymType, string> = {
-  kp: '○ KP매커니컬접합', isolation: '⊗ 이탈방지접합', valve: '× 제수밸브', airvalve: '◎ 공기밸브',
-};
+const SYM_NAMES: Record<SymType, string> = Object.fromEntries(
+  SYMBOL_ORDER.map((t) => [t, SYMBOL_META[t].ko]),
+) as Record<SymType, string>;
+const SYM_BTN: Record<SymType, string> = Object.fromEntries(
+  SYMBOL_ORDER.map((t) => [t, `${SYMBOL_META[t].glyph} ${SYMBOL_META[t].ko}`]),
+) as Record<SymType, string>;
 const CIRCLED = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫','⑬','⑭','⑮'];
 
-// ── 기호 SVG ─────────────────────────────────────────
+// ── 기호 SVG (8종) ───────────────────────────────────
 function SymSvg({ type, cx, cy, selected }: { type: SymType; cx: number; cy: number; selected?: boolean }) {
   const col = selected ? '#f59e0b' : '#1e3a5f';
-  if (type === 'kp') return <circle cx={cx} cy={cy} r={10} fill="white" stroke={col} strokeWidth={2} />;
-  if (type === 'isolation') return (
-    <>
-      <circle cx={cx} cy={cy} r={12} fill="white" stroke={col} strokeWidth={2} />
-      <circle cx={cx} cy={cy} r={6}  fill="white" stroke={col} strokeWidth={1.5} />
-    </>
-  );
-  if (type === 'valve') return (
-    <>
-      <circle cx={cx} cy={cy} r={10} fill="white" stroke={col} strokeWidth={2} />
-      <line x1={cx-7} y1={cy-7} x2={cx+7} y2={cy+7} stroke={col} strokeWidth={2} />
-      <line x1={cx+7} y1={cy-7} x2={cx-7} y2={cy+7} stroke={col} strokeWidth={2} />
-    </>
-  );
-  return <polygon points={`${cx},${cy-10} ${cx-8},${cy+8} ${cx+8},${cy+8}`} fill={col} />;
+  switch (type) {
+    case 'kp':
+      return <circle cx={cx} cy={cy} r={10} fill="white" stroke={col} strokeWidth={2} />;
+    case 'isolation':
+      return (
+        <>
+          <circle cx={cx} cy={cy} r={12} fill="white" stroke={col} strokeWidth={2} />
+          <circle cx={cx} cy={cy} r={6}  fill="white" stroke={col} strokeWidth={1.5} />
+        </>
+      );
+    case 'valve':
+      return (
+        <>
+          <circle cx={cx} cy={cy} r={10} fill="white" stroke={col} strokeWidth={2} />
+          <line x1={cx-7} y1={cy-7} x2={cx+7} y2={cy+7} stroke={col} strokeWidth={2} />
+          <line x1={cx+7} y1={cy-7} x2={cx-7} y2={cy+7} stroke={col} strokeWidth={2} />
+        </>
+      );
+    case 'airvalve':
+      return <polygon points={`${cx},${cy-10} ${cx-8},${cy+8} ${cx+8},${cy+8}`} fill={col} />;
+    case 'drainvalve':
+      return <polygon points={`${cx-8},${cy-8} ${cx+8},${cy-8} ${cx},${cy+10}`} fill="white" stroke={col} strokeWidth={2} />;
+    case 'hydrant':
+      return (
+        <>
+          <circle cx={cx} cy={cy} r={10} fill="white" stroke={col} strokeWidth={2} />
+          <line x1={cx-4} y1={cy-5} x2={cx-4} y2={cy+5} stroke={col} strokeWidth={2} />
+          <line x1={cx+4} y1={cy-5} x2={cx+4} y2={cy+5} stroke={col} strokeWidth={2} />
+          <line x1={cx-4} y1={cy} x2={cx+4} y2={cy} stroke={col} strokeWidth={2} />
+        </>
+      );
+    case 'bend':
+      return (
+        <polyline
+          points={`${cx-9},${cy+7} ${cx-9},${cy-4} ${cx+2},${cy-4} ${cx+9},${cy+3}`}
+          fill="none" stroke={col} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round"
+        />
+      );
+    case 'manhole':
+      return (
+        <>
+          <rect x={cx-10} y={cy-10} width={20} height={20} fill="white" stroke={col} strokeWidth={2} rx={2} />
+          <circle cx={cx} cy={cy} r={6} fill="white" stroke={col} strokeWidth={1.5} />
+        </>
+      );
+    default:
+      return null;
+  }
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────
@@ -183,28 +220,26 @@ export default function BlueprintEditor({ projectId, onAddItems }: BlueprintEdit
     finally { setAiLoading(false); }
   }
 
-  function getMaterials() {
-    const map: Record<string, number> = {};
-    sections.forEach(sec => {
-      sec.symbols.forEach(sym => {
-        const k = `${SYM_NAMES[sym.type]}|${sec.newPipe}`;
-        map[k] = (map[k] ?? 0) + 1;
-      });
-    });
-    return Object.entries(map).map(([k, qty]) => {
-      const [name, spec] = k.split('|');
-      return { name, spec, unit: '개', qty };
+  // 구간 기호(BpSymbol) → 공유 DrawingSection.components 로 변환
+  function toDrawingSections(): DrawingSection[] {
+    return sections.map(sec => {
+      const counts: Record<string, number> = {};
+      sec.symbols.forEach(sym => { counts[sym.type] = (counts[sym.type] ?? 0) + 1; });
+      return {
+        id: sec.label, existingPipe: sec.existingPipe, newPipe: sec.newPipe, length: sec.length,
+        components: Object.entries(counts).map(([type, qty]) => ({
+          type: type as SymType, spec: sec.newPipe, qty,
+        })),
+      };
     });
   }
 
+  function getMaterials() {
+    return aggregateMaterials(toDrawingSections());
+  }
+
   function handleEstimateLink() {
-    const mats = getMaterials();
-    onAddItems(mats.map((m, i) => ({
-      id: `bp-${Date.now()}-${i}`, estimate_id: projectId, category: '배관공',
-      work_name: `${m.name} ${m.spec}`.trim(), spec: m.spec, unit: m.unit, quantity: m.qty,
-      unit_price: 0, labor_amount: 0, material_amount: 0, expense_amount: 0, total_amount: 0,
-      is_night: false, sort_order: i,
-    })));
+    onAddItems(materialsToEstimateItems(getMaterials(), projectId));
     setEstimateLinked(true);
     setTimeout(() => setEstimateLinked(false), 4000);
   }
@@ -212,12 +247,7 @@ export default function BlueprintEditor({ projectId, onAddItems }: BlueprintEdit
   async function handleDxf() {
     const drawingData = {
       projectName: `${projectId}_계통도`,
-      sections: sections.map(sec => ({
-        id: sec.label, existingPipe: sec.existingPipe, newPipe: sec.newPipe, length: sec.length,
-        components: Object.entries(
-          sec.symbols.reduce<Record<string, number>>((acc, s) => { acc[s.type] = (acc[s.type] ?? 0) + 1; return acc; }, {})
-        ).map(([type, qty]) => ({ type, spec: sec.newPipe, qty })),
-      })),
+      sections: toDrawingSections(),
       warnings: [], totalMaterials: getMaterials(),
     };
     try {
