@@ -1,165 +1,132 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Drawing from 'dxf-writer';
-import { aggregateMaterials, SYMBOL_META, symbolTypeByKo } from '@/types/drawing';
-import type { SymbolType, DrawingData } from '@/types/drawing';
 
-// 구간/관 레이아웃 상수 (DXF 단위 = m 느낌)
-const SECTION_GAP = 14;   // 구간 간 세로 간격
-const PIPE_GAP = 3;       // 기존관↔신설관 간격
-const X_START = 5;
-const MAX_LEN = 120;      // 도면상 최대 가로 길이 (실제 연장과 무관한 표시 스케일)
+// 경로(폴리라인) 기반 DXF 생성
+// doc.route.vertices(비율 0~100) → scale 적용해 실좌표(m)로 변환.
 
-const NAVY = Drawing.ACI.BLUE;
-const RED = Drawing.ACI.RED;
-const GRAY = 8;
+type Pt = { x: number; y: number };
+type SymType =
+  | 'gate_valve' | 'air_valve' | 'restraint' | 'socket' | 'bend'
+  | 'tee' | 'cap' | 'flange' | 'reducer' | 'kp' | 'hydrant' | 'manhole';
 
-// 기호 레이어 색상
-const SYM_COLOR: Record<SymbolType, number> = {
-  kp: Drawing.ACI.GREEN,
-  isolation: Drawing.ACI.CYAN,
-  valve: Drawing.ACI.YELLOW,
-  airvalve: Drawing.ACI.MAGENTA,
-  drainvalve: Drawing.ACI.GREEN,
-  hydrant: Drawing.ACI.RED,
-  bend: Drawing.ACI.CYAN,
-  manhole: Drawing.ACI.WHITE,
-};
-
-function drawSymbol(d: Drawing, type: SymbolType, x: number, y: number) {
-  const r = 0.6;
-  switch (type) {
-    case 'kp':
-      d.drawCircle(x, y, r);
-      break;
-    case 'isolation':
-      d.drawCircle(x, y, r);
-      d.drawCircle(x, y, r * 0.5);
-      break;
-    case 'valve':
-      d.drawCircle(x, y, r);
-      d.drawLine(x - r, y - r, x + r, y + r);
-      d.drawLine(x + r, y - r, x - r, y + r);
-      break;
-    case 'airvalve':
-      d.drawPolyline([[x, y + r], [x - r, y - r], [x + r, y - r]], true);
-      break;
-    case 'drainvalve':
-      d.drawPolyline([[x - r, y + r], [x + r, y + r], [x, y - r]], true);
-      break;
-    case 'hydrant':
-      d.drawCircle(x, y, r);
-      d.drawText(x, y, r * 0.9, 0, 'H', 'center', 'middle');
-      break;
-    case 'bend':
-      d.drawPolyline([[x - r, y - r], [x - r, y + r * 0.4], [x + r, y + r * 0.4]], false);
-      break;
-    case 'manhole':
-      d.drawRect(x - r, y - r, x + r, y + r);
-      d.drawCircle(x, y, r * 0.5);
-      break;
-  }
+interface BpSymbol { id: string; type: SymType; spec: string; t: number; }
+interface BpNode { id: string; t: number; label: string; }
+interface BpSection {
+  id: string; label: string; t0: number; t1: number;
+  existingPipe: string; newPipe: string; length: number;
+  depthStart: number; depthEnd: number;
+  detailRoute?: { vertices: Pt[] };
+  symbols: BpSymbol[];
+}
+interface BpDoc {
+  scale: number;
+  route: { vertices: Pt[] };
+  nodes: BpNode[];
+  sections: BpSection[];
 }
 
-function generateDXF(data: DrawingData): string {
-  const d: Drawing = new Drawing();
-  d.setUnits('Meters');
+const SYM_LABEL: Record<SymType, string> = {
+  gate_valve: 'GV', air_valve: 'AV', restraint: 'RJ', socket: 'SO', bend: 'BD',
+  tee: 'TEE', cap: 'CAP', flange: 'FL', reducer: 'RD', kp: 'KP', hydrant: 'HY', manhole: 'MH',
+};
 
-  // 점선 라인타입 (신설관)
-  d.addLineType('DASHED', '_ _ _ _', [0.5, -0.25]);
+function pathLength(v: Pt[]): number {
+  let l = 0;
+  for (let i = 1; i < v.length; i++) l += Math.hypot(v[i].x - v[i - 1].x, v[i].y - v[i - 1].y);
+  return l;
+}
+function pointAt(v: Pt[], t: number): Pt {
+  if (v.length === 0) return { x: 0, y: 0 };
+  if (v.length === 1) return v[0];
+  const total = pathLength(v);
+  if (total === 0) return v[0];
+  let target = Math.max(0, Math.min(1, t)) * total;
+  for (let i = 1; i < v.length; i++) {
+    const seg = Math.hypot(v[i].x - v[i - 1].x, v[i].y - v[i - 1].y);
+    if (target <= seg || i === v.length - 1) {
+      const f = seg === 0 ? 0 : target / seg;
+      return { x: v[i - 1].x + (v[i].x - v[i - 1].x) * f, y: v[i - 1].y + (v[i].y - v[i - 1].y) * f };
+    }
+    target -= seg;
+  }
+  return v[v.length - 1];
+}
 
-  // 레이어
-  d.addLayer('EXISTING_PIPE', NAVY, 'CONTINUOUS');
-  d.addLayer('NEW_PIPE', RED, 'DASHED');
-  d.addLayer('LABEL', GRAY, 'CONTINUOUS');
-  d.addLayer('TABLE', Drawing.ACI.WHITE, 'CONTINUOUS');
-  (Object.keys(SYM_COLOR) as SymbolType[]).forEach((t) => {
-    d.addLayer(`SYM_${t.toUpperCase()}`, SYM_COLOR[t], 'CONTINUOUS');
-  });
+function generateDXF(doc: BpDoc): string {
+  const s = doc.scale || 1;
+  // 비율좌표→실좌표(m). y는 DXF 상향이 +이므로 반전.
+  const MX = (x: number) => x * s;
+  const MY = (y: number) => (100 - y) * s;
 
-  // 제목
-  d.setActiveLayer('LABEL');
-  d.drawText(X_START, SECTION_GAP * 0.6, 1.2, 0, `${data.projectName || '계통도'} - 상하수도 관로 계통도`);
+  let layers = '';
+  layers += '0\nLAYER\n2\nROUTE\n70\n0\n62\n1\n6\nDASHED\n';
+  layers += '0\nLAYER\n2\nNODE\n70\n0\n62\n5\n6\nCONTINUOUS\n';
+  layers += '0\nLAYER\n2\nNEW_PIPE\n70\n0\n62\n1\n6\nCONTINUOUS\n';
+  layers += '0\nLAYER\n2\nSYMBOL\n70\n0\n62\n3\n6\nCONTINUOUS\n';
+  layers += '0\nLAYER\n2\nLABEL\n70\n0\n62\n7\n6\nCONTINUOUS\n';
 
-  data.sections.forEach((section, si) => {
-    const yBase = -(si + 1) * SECTION_GAP;
-    const yExisting = yBase;
-    const yNew = yBase - PIPE_GAP;
-    const len = section.length > 0 ? Math.min(section.length, MAX_LEN) : 50;
-    const x1 = X_START;
-    const x2 = x1 + len;
+  let e = '';
+  const verts = doc.route.vertices ?? [];
 
-    // 기존관 (실선)
-    d.setActiveLayer('EXISTING_PIPE');
-    d.drawLine(x1, yExisting, x2, yExisting);
-
-    // 신설관 (점선)
-    d.setActiveLayer('NEW_PIPE');
-    d.drawLine(x1, yNew, x2, yNew);
-
-    // 구간 레이블
-    d.setActiveLayer('LABEL');
-    d.drawText(x1, yExisting + 1.2, 0.9, 0,
-      `${section.id} (${section.existingPipe} -> ${section.newPipe}, L=${section.length}m)`);
-    d.drawText(x2 + 1, yExisting, 0.8, 0, section.existingPipe, 'left', 'middle');
-    d.drawText(x2 + 1, yNew, 0.8, 0, section.newPipe, 'left', 'middle');
-
-    // 기호 균등 배치
-    const total = section.components.reduce((s, c) => s + c.qty, 0);
-    const step = total > 0 ? len / (total + 1) : len / 2;
-    let idx = 0;
-    section.components.forEach((comp) => {
-      for (let q = 0; q < comp.qty; q++) {
-        idx++;
-        const sx = x1 + step * idx;
-        d.setActiveLayer(`SYM_${comp.type.toUpperCase()}`);
-        drawSymbol(d, comp.type, sx, yExisting - PIPE_GAP / 2);
-        // ASCII 약어 라벨 (한글 깨짐 방지)
-        d.setActiveLayer('LABEL');
-        d.drawText(sx, yExisting - PIPE_GAP - 1.2, 0.6, 0, SYMBOL_META[comp.type].dxf, 'center', 'top');
-      }
-    });
-  });
-
-  // 물량집계표 (도면 하단)
-  const materials = aggregateMaterials(data.sections);
-  if (materials.length > 0) {
-    d.setActiveLayer('TABLE');
-    const tableY = -(data.sections.length + 2) * SECTION_GAP;
-    const rowH = 2;
-    const cols = [0, 4, 20, 36, 44]; // 번호/품명/규격/단위/수량 x오프셋
-    const colW = 52;
-    const headerY = tableY;
-
-    d.drawText(X_START, headerY + rowH, 1, 0, '[물량집계표 / Material List]');
-    // 헤더
-    const head = ['No', 'ITEM', 'SPEC', 'UNIT', 'QTY'];
-    head.forEach((h, i) => d.drawText(X_START + cols[i], headerY, 0.8, 0, h, 'left', 'middle'));
-    // 가로줄
-    d.drawLine(X_START, headerY - rowH / 2, X_START + colW, headerY - rowH / 2);
-
-    materials.forEach((m, i) => {
-      const ry = headerY - rowH * (i + 1);
-      const t = symbolTypeByKo(m.name);
-      const row = [
-        String(i + 1),
-        t ? SYMBOL_META[t].dxf : m.name,
-        m.spec,
-        'EA',
-        String(m.qty),
-      ];
-      row.forEach((c, ci) => d.drawText(X_START + cols[ci], ry, 0.7, 0, c, 'left', 'middle'));
-    });
+  // 경로 폴리라인
+  if (verts.length >= 2) {
+    e += `0\nPOLYLINE\n8\nROUTE\n66\n1\n70\n0\n`;
+    for (const v of verts) e += `0\nVERTEX\n8\nROUTE\n10\n${MX(v.x)}\n20\n${MY(v.y)}\n30\n0\n`;
+    e += `0\nSEQEND\n`;
   }
 
-  return d.toDxfString();
+  // 격점 마커 + 라벨
+  (doc.nodes ?? []).forEach((n) => {
+    const p = pointAt(verts, n.t);
+    e += `0\nCIRCLE\n8\nNODE\n10\n${MX(p.x)}\n20\n${MY(p.y)}\n30\n0\n40\n${0.6 * s}\n`;
+    e += `0\nTEXT\n8\nLABEL\n10\n${MX(p.x) + s}\n20\n${MY(p.y)}\n30\n0\n40\n${1.2 * s}\n1\n${n.label}\n`;
+  });
+
+  // 구간 라벨 + 구간 상세도(detailRoute + 기호)
+  (doc.sections ?? []).forEach((sec) => {
+    const mid = pointAt(verts, (sec.t0 + sec.t1) / 2);
+    e += `0\nTEXT\n8\nLABEL\n10\n${MX(mid.x)}\n20\n${MY(mid.y) + s}\n30\n0\n40\n${1 * s}\n1\n${sec.label} ${sec.newPipe} L=${sec.length}m H=-${sec.depthStart}m\n`;
+
+    const dv = sec.detailRoute?.vertices ?? [];
+    if (dv.length < 2) return;
+    // 상세경로(비율 0~100)를 구간 중앙 부근에 축소 배치 (10x10 m 박스)
+    const BOX = 10;
+    const dX = (x: number) => MX(mid.x) + (x / 100 - 0.5) * BOX;
+    const dY = (y: number) => MY(mid.y) - 6 * s - (y / 100 - 0.5) * BOX;
+
+    // 상세 관로 폴리라인
+    e += `0\nPOLYLINE\n8\nNEW_PIPE\n66\n1\n70\n0\n`;
+    for (const v of dv) e += `0\nVERTEX\n8\nNEW_PIPE\n10\n${dX(v.x)}\n20\n${dY(v.y)}\n30\n0\n`;
+    e += `0\nSEQEND\n`;
+
+    sec.symbols.forEach((sym) => {
+      const p = pointAt(dv, sym.t);
+      e += `0\nCIRCLE\n8\nSYMBOL\n10\n${dX(p.x)}\n20\n${dY(p.y)}\n30\n0\n40\n${0.5 * s}\n`;
+      e += `0\nTEXT\n8\nSYMBOL\n10\n${dX(p.x) - 0.4 * s}\n20\n${dY(p.y) - 0.4 * s}\n30\n0\n40\n${0.8 * s}\n1\n${SYM_LABEL[sym.type]}\n`;
+    });
+  });
+
+  return [
+    '0', 'SECTION', '2', 'HEADER',
+    '9', '$ACADVER', '1', 'AC1009',
+    '9', '$INSUNITS', '70', '6',
+    '0', 'ENDSEC',
+    '0', 'SECTION', '2', 'TABLES',
+    '0', 'TABLE', '2', 'LAYER',
+    layers.trim(),
+    '0', 'ENDTAB',
+    '0', 'ENDSEC',
+    '0', 'SECTION', '2', 'ENTITIES',
+    e.trim(),
+    '0', 'ENDSEC',
+    '0', 'EOF',
+  ].join('\n');
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { drawingData }: { drawingData: DrawingData } = await req.json();
-    const dxf = generateDXF(drawingData);
-    const fileName = encodeURIComponent(`${drawingData.projectName || 'drawing'}_계통도.dxf`);
-
+    const { doc, projectName }: { doc: BpDoc; projectName?: string } = await req.json();
+    const dxf = generateDXF(doc);
+    const fileName = encodeURIComponent(`${projectName || 'drawing'}_계통도.dxf`);
     return new NextResponse(dxf, {
       headers: {
         'Content-Type': 'application/dxf',
