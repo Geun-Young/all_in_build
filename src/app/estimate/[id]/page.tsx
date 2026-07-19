@@ -111,7 +111,7 @@ function QuantityModal({ price, onConfirm, onClose }: QuantityModalProps) {
                   </div>
                 ))}
                 {price.expense_rate > 0 && (
-                  <div className="flex justify-between text-xs pt-1 border-t border-[#dbeafe]">
+                  <div className="flex justify-between text-xs pt-1 border-t border-[#e5e7eb]">
                     <span className="text-[#9ca3af]">공구손료</span>
                     <span className="text-[#9ca3af]">{price.expense_base === 'labor' ? '노무비' : '(노무+재료)'}×{price.expense_rate}%</span>
                   </div>
@@ -456,7 +456,7 @@ export default function EstimateDetailPage() {
         )}
 
         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
-          status === 'confirmed' ? 'bg-[#dbeafe] text-[#1e40af]' : 'bg-[#f3f4f6] text-[#6b7280]'
+          status === 'confirmed' ? 'bg-[#1e3a5f] text-white' : 'bg-[#f3f4f6] text-[#6b7280]'
         }`}>
           {status === 'confirmed' ? '확정' : '작성중'}
         </span>

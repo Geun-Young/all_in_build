@@ -6,6 +6,7 @@ import Badge from '@/components/ui/Badge';
 import AddProjectModal, { ProjectFormData } from '@/components/features/AddProjectModal';
 import { Project, ProjectStatus } from '@/types';
 import { Search, Plus, MapPin, Calendar, ChevronRight, HardHat, MoreHorizontal } from 'lucide-react';
+import Logo from '@/components/ui/Logo';
 
 const DUMMY_PROJECTS: Project[] = [
   {
@@ -114,7 +115,7 @@ export default function HomePage() {
     <div onClick={() => setOpenMenuId(null)}>
       {/* 헤더 */}
       <header className="bg-white border-b border-[#e5e7eb] px-5 flex items-center justify-between" style={{ height: '80px' }}>
-        <img src="/new_logo.png" alt="All-In Build" style={{ height: '52px', width: 'auto' }} />
+        <Logo variant="light" size={34} />
         <button
           onClick={openAdd}
           className="flex items-center gap-2 bg-[#1e3a5f] text-white px-5 rounded-xl font-medium hover:bg-[#2d5080] transition-colors"

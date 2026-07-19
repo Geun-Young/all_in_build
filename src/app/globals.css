@@ -1,15 +1,28 @@
 @import "tailwindcss";
 
+/* ── 디자인 토큰 ──────────────────────────────────────
+   사용 가능 색: 흰색 + 네이비 스케일 + 회색 계열만.
+   그 외 색 추가 금지 (CLAUDE.md). */
 @theme inline {
   --color-background: #ffffff;
   --color-foreground: #111827;
+  --color-surface: #f8fafc;       /* 섹션 구분 배경 */
   --font-sans: var(--font-geist-sans);
 
+  /* 네이비 스케일 */
   --color-navy-50: #f0f4f9;
   --color-navy-100: #d9e4f0;
   --color-navy-500: #3b6399;
-  --color-navy-700: #1e3a5f;
-  --color-navy-900: #0f1e33;
+  --color-navy-700: #1e3a5f;      /* 포인트 컬러 */
+  --color-navy-800: #152844;      /* 다크 사이드바 호버 */
+  --color-navy-900: #0f1e33;      /* 다크 사이드바 배경 */
+
+  /* 회색 */
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-700: #374151;
+  --color-gray-900: #111827;
+  --color-border: #e5e7eb;
 }
 
 body {

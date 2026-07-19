@@ -567,7 +567,7 @@ export default function ProjectPage() {
             )}
 
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
-              estimateStatus === 'confirmed' ? 'bg-[#dbeafe] text-[#1e40af]' : 'bg-[#f3f4f6] text-[#6b7280]'
+              estimateStatus === 'confirmed' ? 'bg-[#1e3a5f] text-white' : 'bg-[#f3f4f6] text-[#6b7280]'
             }`} style={{ fontSize: '13px' }}>
               {estimateStatus === 'confirmed' ? '확정' : '작성중'}
             </span>
